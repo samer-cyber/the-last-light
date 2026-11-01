@@ -15,6 +15,7 @@ namespace Game
         [SerializeField] MorseEmitter emitter;
         [SerializeField] float frequency = 110f;
         [SerializeField, Range(0f, 1f)] float volume = 0.2f;
+        [SerializeField, Tooltip("Sound with the message; off when recorded pulses play it instead.")] bool followMessage = true;
 
         /// <summary>Holds the tone at this level (0 to 1) whatever the message is doing.</summary>
         public float Drive { get; set; }
@@ -43,7 +44,7 @@ namespace Game
 
         void Update()
         {
-            float lit = emitter != null && emitter.Lit ? 1f : 0f;
+            float lit = followMessage && emitter != null && emitter.Lit ? 1f : 0f;
             target = Muted ? 0f : Mathf.Max(lit, Drive);
             pitch = Pitch;
         }

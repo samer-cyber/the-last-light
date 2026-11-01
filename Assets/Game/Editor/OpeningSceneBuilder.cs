@@ -21,6 +21,7 @@ namespace Game.Building
     {
         const string Root = "Assets/Game";
         const string ScenePath = Root + "/Scenes/Opening.unity";
+        const string Models = Root + "/Models/Character";
         const float CoreRadius = 0.4f;   // at the start; the orb grows slowly
         const float CoronaScale = 12f;   // billboard sizes, in core diameters
         const float GlowScale = 6f;
@@ -79,7 +80,8 @@ namespace Game.Building
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             RenderSettings.skybox = sky;
             RenderSettings.ambientMode = AmbientMode.Flat;
-            RenderSettings.ambientLight = Color.black;
+            // A faint violet fill, so the hands and the notebook are not pitch black on their dark side.
+            RenderSettings.ambientLight = new Color(0.05f, 0.045f, 0.08f);
             RenderSettings.fog = false;
 
             // The orb.
@@ -102,9 +104,14 @@ namespace Game.Building
             // The orb's own light is drawn after the warp (see AddRenderPasses), so it does not bend into itself.
             foreach (var lit in new Component[] { corona, glow, rings }) lit.gameObject.layer = orbLight;
             var warp = orbObject.AddComponent<SpaceWarp>();
+            var shine = new GameObject("Shine").AddComponent<Light>();
+            shine.transform.SetParent(orbObject.transform, false);
+            shine.type = LightType.Directional;
+            shine.color = new Color(0.78f, 0.74f, 1f);
+            shine.shadows = LightShadows.None;
             var orb = orbObject.AddComponent<Orb>();
             Wire(orb, ("emitter", emitter), ("warp", warp), ("body", body), ("core", core), ("corona", corona), ("glow", glow),
-                ("dust", dust), ("haze", haze), ("rings", rings), ("burst", burst));
+                ("dust", dust), ("haze", haze), ("rings", rings), ("burst", burst), ("shine", shine));
 
             // The player, a little above the dust disc, facing the orb.
             var playerObject = new GameObject("Player");
@@ -134,6 +141,7 @@ namespace Game.Building
             var player = playerObject.AddComponent<FloatingPlayer>();
             Wire(player, ("view", camera), ("orb", orbObject.transform));
             Wire(warp, ("view", camera));
+            Wire(orb, ("viewer", camera.transform));
 
             var volumeObject = new GameObject("Global Volume");
             var volume = volumeObject.AddComponent<Volume>();
@@ -142,11 +150,19 @@ namespace Game.Building
             volume.sharedProfile = profile;
 
             // Sound.
+            // Newer sounds (Audio/v2) are used when present, the first ones otherwise.
             var sound = new GameObject("Sound").transform;
-            var drone = MakeSource("Drone", sound, FindClip("void_drone"), true);
+            var droneV2 = FindClip("void_drone_v2");
+            var drone = MakeSource("Drone", sound, droneV2 ?? FindClip("void_drone"), true);
+            var near = MakeSource("Near", sound, FindClip("near_orb_loop"), true);
+            var music = MakeSource("Music", sound, FindClip("music_void"), true);
             var effects = MakeSource("Effects", sound, null, false);
+            var pulse = new GameObject("Pulse").AddComponent<MorsePulse>();
+            pulse.transform.SetParent(sound, false);
+            Wire(pulse, ("emitter", emitter), ("dot", FindClip("pulse_dot") ?? FindClip("pulse_dot_A")), ("dash", FindClip("pulse_dash") ?? FindClip("pulse_dash_A")));
             var voice = MakeSource("Voice", sound, null, true).gameObject.AddComponent<MorseVoice>();
             Wire(voice, ("emitter", emitter));
+            SetValue(voice, "followMessage", !pulse.HasClips);
             var paperSound = MakeSource("Paper", sound, null, false);
 
             // What is drawn over the world. The style sheets are loaded only now: opening the new
@@ -156,17 +172,37 @@ namespace Game.Building
             var interfaceObject = new GameObject("Interface");
             var document = interfaceObject.AddComponent<UIDocument>();
             document.panelSettings = panel;
-            var notepad = interfaceObject.AddComponent<Notepad>();
-            Wire(notepad, ("document", document), ("style", notepadStyle), ("paper", paper), ("emitter", emitter), ("player", player),
-                ("sound", paperSound), ("openClip", FindClip("paper_open")), ("closeClip", FindClip("paper_close")), ("writeClip", FindClip("pencil_write")));
             var hud = interfaceObject.AddComponent<Hud>();
             Wire(hud, ("document", document), ("style", hudStyle));
 
-            var breakClip = FindClip("orb_break");
+            // A soft light from the player's side, so their hands and notebook are seen; the orb lights them from behind.
+            var fill = new GameObject("Fill Light").AddComponent<Light>();
+            fill.transform.SetParent(cameraObject.transform, false);
+            fill.transform.localRotation = Quaternion.Euler(28f, 18f, 0f);
+            fill.type = LightType.Directional;
+            fill.color = new Color(0.92f, 0.9f, 1f);
+            fill.intensity = 0.55f;
+            fill.shadows = LightShadows.None;
+
+            // The notebook in the player's hands; its page is drawn by a second panel into a texture.
+            var held = MakeHeldNotebook(cameraObject.transform, orb, MakeNotebookPanel(panel.themeStyleSheet));
+            var notebookObject = new GameObject("Notebook Page");
+            var pageDocument = notebookObject.AddComponent<UIDocument>();
+            pageDocument.panelSettings = AssetDatabase.LoadAssetAtPath<PanelSettings>($"{Root}/UI/Notebook Panel.asset");
+            var notepad = notebookObject.AddComponent<Notepad>();
+            Wire(notepad, ("document", pageDocument), ("held", held), ("style", notepadStyle), ("paper", paper), ("emitter", emitter), ("player", player),
+                ("sound", paperSound), ("openClip", FindClip("notebook_raise") ?? FindClip("paper_open")),
+                ("closeClip", FindClip("notebook_lower") ?? FindClip("paper_close")), ("writeClip", FindClip("pencil_write")));
+            WireArray(notepad, "strokeClips", Enumerable.Range(1, 6).Select(i => (Object)FindClip($"pencil_stroke_{i}")).Where(c => c != null).ToArray());
+
+            var breakClip = FindClip("orb_break_v2") ?? FindClip("orb_break");
+            var gatherClip = FindClip("orb_gather_v2") ?? MakeReversed(FindClip("orb_break"), "orb_gather");
             var director = new GameObject("Director").AddComponent<OpeningDirector>();
-            Wire(director, ("player", player), ("orb", orb), ("emitter", emitter), ("voice", voice), ("notepad", notepad), ("hud", hud),
-                ("volume", volume), ("drone", drone), ("effects", effects), ("risingClip", FindClip("orb_rising")), ("breakClip", breakClip),
-                ("gatherClip", MakeReversed(breakClip, "orb_gather")));
+            Wire(director, ("player", player), ("orb", orb), ("emitter", emitter), ("voice", voice), ("pulse", pulse), ("notepad", notepad), ("hud", hud),
+                ("volume", volume), ("drone", drone), ("nearSound", near), ("music", music), ("effects", effects),
+                ("risingClip", FindClip("orb_rising")), ("breakClip", breakClip), ("gatherClip", gatherClip));
+            // The second drone is mixed quiet in the file itself; the first was not.
+            if (droneV2) SetValue(director, "droneVolume", 0.9f);
 
             EditorSceneManager.SaveScene(scene, ScenePath);
             var others = EditorBuildSettings.scenes.Where(s => s.path != ScenePath);
@@ -254,6 +290,112 @@ namespace Game.Building
             }
             AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
             return AssetDatabase.LoadAssetAtPath<AudioClip>(path);
+        }
+
+        /// <summary>
+        /// The notebook and pencil held in front of the camera, with materials for a dark room lit only
+        /// by the orb, and the page showing the panel's texture.
+        /// </summary>
+        static HeldNotebook MakeHeldNotebook(Transform camera, Orb orb, PanelSettings pagePanel)
+        {
+            var held = new GameObject("Held").AddComponent<HeldNotebook>();
+            held.transform.SetParent(camera, false);
+            var notebook = (GameObject)PrefabUtility.InstantiatePrefab(Load<GameObject>($"{Models}/Notebook.fbx"));
+            notebook.transform.SetParent(held.transform, false);
+            var pencil = (GameObject)PrefabUtility.InstantiatePrefab(Load<GameObject>($"{Models}/Pencil.fbx"));
+            pencil.transform.SetParent(held.transform, false);
+
+            var looks = new Dictionary<string, Material>
+            {
+                ["NotebookCover"] = MakeLit("Notebook Cover", new Color(0.09f, 0.11f, 0.2f), 0.35f, 0f),
+                ["Paper"] = MakeLit("Notebook Paper Edge", new Color(0.86f, 0.84f, 0.78f), 0.15f, 0f),
+                ["Wire"] = MakeLit("Wire", new Color(0.62f, 0.62f, 0.66f), 0.75f, 1f),
+                ["PencilPaint"] = MakeLit("Pencil Paint", new Color(0.93f, 0.68f, 0.12f), 0.55f, 0f),
+                ["PencilWood"] = MakeLit("Pencil Wood", new Color(0.86f, 0.66f, 0.45f), 0.25f, 0f),
+                ["PencilGraphite"] = MakeLit("Pencil Graphite", new Color(0.12f, 0.12f, 0.13f), 0.6f, 0.3f),
+                ["Eraser"] = MakeLit("Eraser", new Color(0.88f, 0.52f, 0.55f), 0.1f, 0f),
+            };
+            var pageMaterial = MakeMaterial("Notebook Page", "Game/Page", m => m.SetTexture("_MainTex", pagePanel.targetTexture));
+            Renderer page = null;
+            foreach (var renderer in notebook.GetComponentsInChildren<Renderer>().Concat(pencil.GetComponentsInChildren<Renderer>()))
+            {
+                renderer.shadowCastingMode = ShadowCastingMode.Off;
+                renderer.receiveShadows = false;
+                if (renderer.name == "Page")
+                {
+                    page = renderer;
+                    renderer.sharedMaterial = pageMaterial;
+                    continue;
+                }
+                renderer.sharedMaterials = renderer.sharedMaterials
+                    .Select(m => m != null && looks.TryGetValue(m.name, out var look) ? look : m).ToArray();
+            }
+            if (page == null) throw new InvalidOperationException("Notebook.fbx has no object named Page");
+            Wire(held, ("notebook", notebook.transform), ("page", page), ("pencil", pencil.transform), ("orb", orb));
+            return held;
+        }
+
+        static Material MakeLit(string name, Color colour, float smoothness, float metallic) =>
+            MakeMaterial(name, "Universal Render Pipeline/Lit", m =>
+            {
+                m.SetColor("_BaseColor", colour);
+                m.SetFloat("_Smoothness", smoothness);
+                m.SetFloat("_Metallic", metallic);
+            });
+
+        /// <summary>A panel that draws into a render texture shaped like an A6 page, 640 by 902 units.</summary>
+        static PanelSettings MakeNotebookPanel(ThemeStyleSheet theme)
+        {
+            string texturePath = $"{Root}/UI/Notebook Page.renderTexture";
+            var texture = AssetDatabase.LoadAssetAtPath<RenderTexture>(texturePath);
+            if (texture == null)
+            {
+                texture = new RenderTexture(1024, 1444, 24, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB)
+                {
+                    name = "Notebook Page",
+                    useMipMap = true,
+                    autoGenerateMips = true,
+                    filterMode = FilterMode.Trilinear,
+                    anisoLevel = 4,
+                };
+                AssetDatabase.CreateAsset(texture, texturePath);
+            }
+            string path = $"{Root}/UI/Notebook Panel.asset";
+            var panel = AssetDatabase.LoadAssetAtPath<PanelSettings>(path);
+            if (panel == null)
+            {
+                panel = ScriptableObject.CreateInstance<PanelSettings>();
+                AssetDatabase.CreateAsset(panel, path);
+            }
+            panel.themeStyleSheet = theme;
+            panel.targetTexture = texture;
+            panel.scaleMode = PanelScaleMode.ScaleWithScreenSize;
+            panel.referenceResolution = new Vector2Int(640, 902);
+            panel.screenMatchMode = PanelScreenMatchMode.MatchWidthOrHeight;
+            panel.match = 0f;
+            panel.clearColor = true;
+            panel.colorClearValue = new Color(0.96f, 0.94f, 0.89f);
+            EditorUtility.SetDirty(panel);
+            return panel;
+        }
+
+        static void WireArray(Object target, string field, Object[] values)
+        {
+            var serialized = new SerializedObject(target);
+            var property = serialized.FindProperty(field) ?? throw new ArgumentException($"{target.GetType().Name} has no serialized field '{field}'");
+            property.arraySize = values.Length;
+            for (int i = 0; i < values.Length; i++) property.GetArrayElementAtIndex(i).objectReferenceValue = values[i];
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        /// <summary>Sets a private serialized number or switch by name.</summary>
+        static void SetValue(Object target, string field, object value)
+        {
+            var serialized = new SerializedObject(target);
+            var property = serialized.FindProperty(field) ?? throw new ArgumentException($"{target.GetType().Name} has no serialized field '{field}'");
+            if (value is bool flag) property.boolValue = flag;
+            else property.floatValue = Convert.ToSingle(value);
+            serialized.ApplyModifiedPropertiesWithoutUndo();
         }
 
         /// <summary>Sets private serialized fields by name.</summary>

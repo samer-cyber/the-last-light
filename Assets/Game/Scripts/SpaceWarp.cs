@@ -27,6 +27,8 @@ namespace Game
         public float CoreRadius { get; set; } = 0.5f;
         /// <summary>How much harder space bends than at rest; 0 turns the warp off.</summary>
         public float Strength { get; set; } = 1f;
+        /// <summary>Multiplies the swirl; the orb raises it as it destabilises.</summary>
+        public float Twist { get; set; } = 1f;
         /// <summary>The radius of the ring of bent light, in metres.</summary>
         public float RingRadius => CoreRadius * ring * Mathf.Max(Strength, 0f);
 
@@ -79,7 +81,7 @@ namespace Game
             }
 
             Shader.SetGlobalVector(CenterId, new Vector4(viewport.x, viewport.y, visible * Mathf.Clamp01(Strength), view.aspect));
-            Shader.SetGlobalVector(ShapeId, new Vector4(core, ringRadius, swirl, colourSplit));
+            Shader.SetGlobalVector(ShapeId, new Vector4(core, ringRadius, swirl * Twist, colourSplit));
             Shader.SetGlobalVector(RipplesId, radii);
             Shader.SetGlobalVector(RippleAmpId, amps);
             Shader.SetGlobalFloat(NearId, near);

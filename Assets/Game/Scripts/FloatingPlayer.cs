@@ -19,7 +19,7 @@ namespace Game
         [SerializeField, Tooltip("Closest the player may come to the orb's centre.")] float nearest = 3f;
         [SerializeField, Tooltip("Farthest the player may drift from it.")] float farthest = 150f;
 
-        /// <summary>The notepad is up: no looking or moving, and the cursor is free.</summary>
+        /// <summary>The notebook is up: the keys write on it, so they do not move the player; looking still works.</summary>
         public bool Writing
         {
             get => writing;
@@ -55,7 +55,8 @@ namespace Game
         void Update()
         {
             float dt = Time.deltaTime;
-            bool free = !writing && !Scripted;
+            bool free = !Scripted;
+            bool canMove = !writing && !Scripted;
             var mouse = Mouse.current;
             var keys = Keyboard.current;
 
@@ -80,7 +81,7 @@ namespace Game
             pitch = Mathf.Lerp(pitch, targetPitch, follow);
 
             Vector3 wish = Vector3.zero;
-            if (free && keys != null)
+            if (canMove && keys != null)
             {
                 if (keys.wKey.isPressed) wish.z += 1f;
                 if (keys.sKey.isPressed) wish.z -= 1f;
@@ -161,9 +162,9 @@ namespace Game
 
         void ApplyCursor()
         {
-            bool locked = !writing;
-            Cursor.lockState = locked ? CursorLockMode.Locked : CursorLockMode.None;
-            Cursor.visible = !locked;
+            // Nothing in the game needs the pointer; the notebook is written on with the keys.
+            Cursor.lockState = CursorLockMode.Locked;
+            Cursor.visible = false;
         }
     }
 }

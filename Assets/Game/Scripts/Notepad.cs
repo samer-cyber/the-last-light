@@ -6,16 +6,18 @@ using UnityEngine.UIElements;
 namespace Game
 {
     /// <summary>
-    /// The player's notepad, a sheet of ruled paper that Tab brings up. The hand notes down every
-    /// dot and dash the orb flashes; the player writes what they think it says and presses Enter.
-    /// The director judges it and the notepad strikes it out or underlines it.
+    /// The page of the player's notebook. Tab raises the notebook (<see cref="HeldNotebook"/>); the
+    /// hand notes down every dot and dash the orb flashes; the player writes what they think it says
+    /// and presses Enter. The director judges it, and the page strikes it out or underlines it. The
+    /// page is drawn into a texture shown on the notebook, and the pencil follows the writing.
     /// </summary>
     public class Notepad : MonoBehaviour
     {
         /// <summary>Spacing of the ruled lines, in panel pixels; every row of writing is this tall.</summary>
         const float Rule = 36f;
 
-        [SerializeField] UIDocument document;
+        [SerializeField, Tooltip("Draws into the page's render texture.")] UIDocument document;
+        [SerializeField] HeldNotebook held;
         [SerializeField] StyleSheet style;
         [SerializeField] Texture2D paper;
         [SerializeField] MorseEmitter emitter;
@@ -24,6 +26,7 @@ namespace Game
         [SerializeField] AudioClip openClip;
         [SerializeField] AudioClip closeClip;
         [SerializeField] AudioClip writeClip;
+        [SerializeField, Tooltip("Short pencil strokes, one played per letter.")] AudioClip[] strokeClips;
         [SerializeField] int rowsKept = 3;
         [SerializeField] int guessesKept = 4;
 
@@ -36,13 +39,19 @@ namespace Game
         /// <summary>False while a scripted moment should keep the notepad away.</summary>
         public bool Available { get; set; } = true;
 
-        VisualElement sheet, page, log, guesses, key, row, lastGuess;
-        TextField answer;
+        VisualElement sheet, page, log, guesses, key, row, lastGuess, answerLine, caret;
+        Label answer;
+        // What is being written. Keys come straight from the keyboard (Keyboard.onTextInput), not
+        // through UI Toolkit's focus, because the page is a panel drawn into a texture.
+        string typed = "";
+        float backspaceHeld, nextRepeat, lastKeyAt = -10f;
         // Typing is taken only once the page is up and every key held when it opened is let go,
         // so a key held to drift (W, A, S, D) does not type itself onto the page.
         bool armed;
         float openedAt;
         readonly System.Random hand = new System.Random(11);
+
+        Keyboard listening;
 
         void Start()
         {
@@ -53,6 +62,7 @@ namespace Game
 
         void OnDestroy()
         {
+            if (listening != null) listening.onTextInput -= OnCharacter;
             if (!emitter) return;
             emitter.SymbolEnded -= OnSymbol;
             emitter.StepStarted -= OnStep;
@@ -61,6 +71,12 @@ namespace Game
         void Update()
         {
             var keys = Keyboard.current;
+            if (keys != listening)
+            {
+                if (listening != null) listening.onTextInput -= OnCharacter;
+                listening = keys;
+                if (listening != null) listening.onTextInput += OnCharacter;
+            }
             if (keys != null)
             {
                 if (keys.tabKey.wasPressedThisFrame)
@@ -75,13 +91,84 @@ namespace Game
             if (!armed && Time.time - openedAt > RaiseSeconds && (keys == null || !keys.anyKey.isPressed))
             {
                 armed = true;
-                answer.SetValueWithoutNotify("");
-                answer.Focus();
+                typed = "";
+                ShowTyped();
+            }
+            if (!armed || keys == null) return;
+            caret.style.opacity = Mathf.Repeat(Time.time - openedAt, 1f) < 0.55f ? 1f : 0f;
+            if (keys.enterKey.wasPressedThisFrame || keys.numpadEnterKey.wasPressedThisFrame) Submit();
+            if (keys.backspaceKey.wasPressedThisFrame)
+            {
+                Erase();
+                backspaceHeld = 0f;
+                nextRepeat = 0.4f;
+            }
+            else if (keys.backspaceKey.isPressed)
+            {
+                backspaceHeld += Time.deltaTime;
+                if (backspaceHeld >= nextRepeat)
+                {
+                    Erase();
+                    nextRepeat += 0.05f;
+                }
             }
         }
 
-        /// <summary>How long the page takes to come up (Notepad.uss, .notepad translate).</summary>
-        const float RaiseSeconds = 0.45f;
+        /// <summary>Writes letters on the answer line, as if typed (the voice can use this too).</summary>
+        public void Write(string text)
+        {
+            foreach (char c in text) Add(c);
+        }
+
+        /// <summary>Writes the answer line down as a guess.</summary>
+        public void Submit()
+        {
+            string text = typed.Trim();
+            if (text.Length == 0 || !Available) return;
+            typed = "";
+            ShowTyped();
+            // The line is drawn on a holder around the words: a label measures its own text and cannot hold children.
+            lastGuess = Element("notepad__guess");
+            lastGuess.Add(Words(text, "notepad__guess-text"));
+            guesses.Add(lastGuess);
+            while (guesses.childCount > guessesKept) guesses.RemoveAt(0);
+            Play(writeClip);
+            Guessed?.Invoke(text);
+        }
+
+        void OnCharacter(char c)
+        {
+            if (IsOpen && armed) Add(c);
+        }
+
+        void Add(char c)
+        {
+            if (char.IsControl(c) || typed.Length >= 40) return;
+            typed += c;
+            lastKeyAt = Time.time;
+            if (!char.IsWhiteSpace(c) && strokeClips != null && strokeClips.Length > 0) Play(strokeClips[hand.Next(strokeClips.Length)]);
+            ShowTyped();
+        }
+
+        void Erase()
+        {
+            if (typed.Length == 0) return;
+            typed = typed.Substring(0, typed.Length - 1);
+            ShowTyped();
+        }
+
+        void ShowTyped()
+        {
+            bool empty = typed.Length == 0;
+            answer.text = empty ? "what is it saying?" : typed;
+            answer.EnableInClassList("notepad__answer-text--placeholder", empty);
+            if (empty) caret.SendToBack();
+            else caret.BringToFront();
+            // Once laid out, the pencil goes to the end of the line.
+            answer.schedule.Execute(() => PencilTo(answer, empty ? 0f : 1f, !empty));
+        }
+
+        float RaiseSeconds => held ? held.RaiseSeconds : 0.45f;
 
         public void Open()
         {
@@ -89,9 +176,10 @@ namespace Game
             IsOpen = HasBeenOpened = true;
             armed = false;
             openedAt = Time.time;
-            sheet.AddToClassList("notepad--open");
+            if (held) held.Raise();
             player.Writing = true;
             Play(openClip);
+            PencilTo(answerLine, 0f, false);
         }
 
         public void Close()
@@ -99,8 +187,8 @@ namespace Game
             if (!IsOpen) return;
             IsOpen = false;
             armed = false;
-            sheet.RemoveFromClassList("notepad--open");
-            answer.Blur();
+            if (held) held.Lower();
+            caret.style.opacity = 0f;
             player.Writing = false;
             Play(closeClip);
         }
@@ -139,11 +227,14 @@ namespace Game
             guesses = Element("notepad__guesses");
             page.Add(guesses);
 
-            answer = new TextField { maxLength = 48 };
-            answer.AddToClassList("notepad__answer");
-            answer.textEdition.placeholder = "what is it saying?";
-            answer.RegisterCallback<KeyDownEvent>(OnAnswerKey, TrickleDown.TrickleDown);
-            page.Add(answer);
+            answerLine = Element("notepad__answer");
+            answer = Words("", "notepad__answer-text");
+            caret = Element("notepad__caret");
+            caret.style.opacity = 0f;
+            answerLine.Add(answer);
+            answerLine.Add(caret);
+            page.Add(answerLine);
+            ShowTyped();
             page.Add(Words("enter  write it down          tab  put it away", "notepad__footer"));
 
             key = BuildKey();
@@ -183,7 +274,8 @@ namespace Game
             if (dash) mark.style.width = 17f + Wobble(2.5f);
             cell.Add(mark);
             row.Add(cell);
-            Draw(mark, "ink--fresh");
+            // The hand notes the flash, unless it is busy writing an answer.
+            Draw(mark, "ink--fresh", () => { if (Time.time - lastKeyAt > 1.5f) PencilTo(cell, 1f, IsOpen); });
         }
 
         void OnStep(MorseCode.StepKind kind)
@@ -201,34 +293,28 @@ namespace Game
             while (log.childCount > rowsKept) log.RemoveAt(0);
         }
 
-        void OnAnswerKey(KeyDownEvent evt)
-        {
-            if (!armed)
-            {
-                evt.StopImmediatePropagation();
-                return;
-            }
-            if (evt.keyCode != KeyCode.Return && evt.keyCode != KeyCode.KeypadEnter) return;
-            evt.StopPropagation();
-            string text = answer.value.Trim();
-            if (text.Length == 0 || !Available) return;
-            answer.SetValueWithoutNotify("");
-            // The line is drawn on a holder around the words: a label measures its own text and cannot hold children.
-            lastGuess = Element("notepad__guess");
-            lastGuess.Add(Words(text, "notepad__guess-text"));
-            guesses.Add(lastGuess);
-            while (guesses.childCount > guessesKept) guesses.RemoveAt(0);
-            Play(writeClip);
-            Guessed?.Invoke(text);
-        }
-
         void Stroke(VisualElement target, string kind)
         {
             if (target == null) return;
             var line = Element(kind);
             line.style.rotate = new Rotate(Angle.Degrees(Wobble(2.5f)));
             target.Add(line);
-            Draw(line, "line--fresh");
+            Draw(line, "line--fresh", () => PencilTo(target, 1f, true));
+        }
+
+        /// <summary>
+        /// Sends the pencil to an element on the page: across it by "along" (0 left edge, 1 right edge)
+        /// plus an offset in page pixels, at its lower edge where the writing sits.
+        /// </summary>
+        void PencilTo(VisualElement target, float along, bool writing, float offset = 0f)
+        {
+            if (!held || target == null) return;
+            var root = document.rootVisualElement.layout;
+            if (root.width <= 0f || root.height <= 0f) return;
+            var bounds = target.worldBound;
+            float x = Mathf.Lerp(bounds.xMin, bounds.xMax, along) + offset;
+            float y = bounds.yMax - 6f;
+            held.WriteAt(new Vector2(x / root.width, 1f - y / root.height), writing);
         }
 
         void DrawRules(MeshGenerationContext context)
@@ -253,9 +339,9 @@ namespace Game
 
         /// <summary>
         /// Starts an element in a state class and drops it once it is laid out, so that its
-        /// transition plays like a stroke of the pen.
+        /// transition plays like a stroke of the pen; then calls back, the element now in place.
         /// </summary>
-        static void Draw(VisualElement element, string startClass)
+        static void Draw(VisualElement element, string startClass, Action placed = null)
         {
             element.AddToClassList(startClass);
             element.RegisterCallback<GeometryChangedEvent>(Drawn);
@@ -264,6 +350,7 @@ namespace Game
             {
                 element.UnregisterCallback<GeometryChangedEvent>(Drawn);
                 element.RemoveFromClassList(startClass);
+                placed?.Invoke();
             }
         }
 

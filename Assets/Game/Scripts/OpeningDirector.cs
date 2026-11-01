@@ -19,10 +19,12 @@ namespace Game
         [SerializeField] Orb orb;
         [SerializeField] MorseEmitter emitter;
         [SerializeField] MorseVoice voice;
+        [SerializeField] MorsePulse pulse;
         [SerializeField] Notepad notepad;
         [SerializeField] Hud hud;
         [SerializeField] Volume volume;
         [SerializeField] AudioSource drone;
+        [SerializeField] AudioSource music;
         [SerializeField, Tooltip("The roar of bent space, louder as the player nears the orb.")] AudioSource nearSound;
         [SerializeField] AudioSource effects;
         [SerializeField] AudioClip risingClip;
@@ -31,6 +33,7 @@ namespace Game
         [SerializeField, Range(0f, 1f)] float droneVolume = 0.12f;
         [SerializeField, Range(0f, 1f)] float risingVolume = 0.6f;
         [SerializeField, Range(0f, 1f)] float nearVolume = 0.8f;
+        [SerializeField, Range(0f, 1f)] float musicVolume = 0.35f;
         [SerializeField, Tooltip("Distance at which the orb starts to be felt, and at which it is felt fully, in metres.")] Vector2 feltBetween = new Vector2(28f, 4f);
         [SerializeField, Tooltip("Seconds without opening the notepad before the first hint about the message.")] float hintAfter = 24f;
         [SerializeField, Tooltip("Seconds with the notepad up before the Morse key turns up.")] float keyAfter = 40f;
@@ -121,6 +124,7 @@ namespace Game
             player.View.fieldOfView = fovRest + 8f * c2;
             orb.Warp = 1f + 0.6f * c2;
             if (nearSound) nearSound.volume = nearVolume * Mathf.Pow(c, 1.5f);
+            if (pulse) pulse.Loudness = 1f + 0.7f * c;
         }
 
         /// <summary>Close to the orb, every symbol it sends pushes the player back, like a heartbeat.</summary>
@@ -172,7 +176,13 @@ namespace Game
             {
                 hud.Black = 1f - Smooth(k);
                 if (drone) drone.volume = droneVolume * k;
-                if (k > 0.35f && phase == Phase.Arriving)
+                if (music && music.clip && !music.isPlaying && k > 0.2f)
+            {
+                music.volume = 0f;
+                music.Play();
+            }
+            if (music) music.volume = musicVolume * Mathf.Clamp01((k - 0.2f) / 0.8f);
+            if (k > 0.35f && phase == Phase.Arriving)
                 {
                     player.Scripted = false;
                     phase = Phase.Listening;
@@ -204,6 +214,8 @@ namespace Game
             hud.HideHint();
             notepad.Available = false;
             emitter.Stop();
+            if (pulse) pulse.Hush();
+            float musicFrom = music ? music.volume : 0f;
             yield return new WaitForSeconds(1.1f);
             notepad.Close();
             player.Scripted = true;
@@ -220,6 +232,7 @@ namespace Game
             {
                 float e = k * k;
                 orb.Swell = e;
+                if (music) music.volume = musicFrom * (1f - Smooth(k));
                 player.View.fieldOfView = Mathf.Lerp(fovFrom, fovRest + 6f * e, Smooth(k));
                 if (nearSound) nearSound.volume = Mathf.Lerp(nearFrom, nearVolume, e);
                 player.TurnToward(orb.transform.position, 1.2f + 2f * k);

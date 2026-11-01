@@ -23,6 +23,9 @@ namespace Game
         [SerializeField] ParticleSystem haze;
         [SerializeField] ParticleSystem rings;
         [SerializeField] ParticleSystem burst;
+        [SerializeField, Tooltip("A directional light kept pointing from the orb to the player: the orb lighting the hands and the notebook.")] Light shine;
+        [SerializeField] Transform viewer;
+        [SerializeField] float shineIntensity = 1.4f;
         [SerializeField, Tooltip("Core radius at the start, in metres.")] float startRadius = 0.4f;
         [SerializeField, Tooltip("Radius it grows toward, in metres.")] float grownRadius = 0.85f;
         [SerializeField, Tooltip("Seconds to grow most of the way.")] float growTime = 240f;
@@ -52,7 +55,7 @@ namespace Game
         float coreIntensity, coronaIntensity, glowIntensity, dustIntensity;
         float dustInflow, hazeInflow;
         ParticleSystem.MinMaxCurve dustTurn, hazeTurn;
-        float dim, stir;
+        float dim, stir, shudder;
 
         void Awake()
         {
@@ -146,7 +149,20 @@ namespace Game
             Drive(glowMat, glowIntensity * light * (1f + 3f * Collapse));
             dustMat.SetFloat(IntensityId, dustIntensity * (1f + 1.1f * Pulse) * light);
 
+            if (shine && viewer)
+            {
+                shine.transform.rotation = Quaternion.LookRotation(viewer.position - transform.position);
+                shine.intensity = body.gameObject.activeSelf ? shineIntensity * (0.45f + 1.4f * Pulse + 1.5f * Instability) * (1f - 0.8f * Collapse) : 0f;
+            }
+
             if (warp.Strength > 0f) warp.Strength = Warp * (1f + 0.2f * Pulse);
+            // As it destabilises, space shudders: ripples come faster and stronger, and it twists.
+            warp.Twist = 1f + 5f * Instability;
+            if (Instability > 0.15f && warp.Strength > 0f && (shudder -= dt) <= 0f)
+            {
+                warp.Ripple(0.008f + 0.03f * Instability);
+                shudder = Mathf.Lerp(0.5f, 0.1f, Instability);
+            }
             warp.CoreRadius = Radius;
 
             var dustVelocity = dust.velocityOverLifetime;

@@ -1,34 +1,16 @@
-/* The notepad: a sheet of ruled paper that comes up from the bottom right.
+/* The notebook's page, drawn into a 640 by 902 panel (an A6 page) shown on the 3D notebook.
    Every row of writing is 36px tall, the spacing of the ruled lines drawn in Notepad.cs. */
 
 .notepad {
     position: absolute;
-    right: 72px;
-    bottom: 40px;
-    width: 640px;
-    height: 684px;
-    opacity: 0;
-    translate: 0 112%;
-    rotate: 3deg;
-    transition-property: translate, rotate, opacity;
-    transition-duration: 0.5s, 0.6s, 0.25s;
-    transition-timing-function: ease-out-cubic, ease-out-cubic, linear;
-}
-
-.notepad--open {
-    opacity: 1;
-    translate: 0 0;
-    rotate: -1.5deg;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
 }
 
 .notepad__shadow {
-    position: absolute;
-    left: 14px;
-    top: 20px;
-    right: -14px;
-    bottom: -18px;
-    border-radius: 8px;
-    background-color: rgba(0, 0, 0, 0.5);
+    display: none;
 }
 
 .notepad__page {
@@ -38,7 +20,7 @@
     right: 0;
     bottom: 0;
     padding: 36px 36px 0 80px;
-    border-radius: 3px;
+    border-radius: 0;
     background-color: rgb(244, 239, 226);
     background-size: 100% 100%;
     overflow: hidden;
@@ -55,8 +37,8 @@
 .notepad__note {
     height: 36px;
     padding-bottom: 5px;
-    font-size: 20px;
-    color: rgb(118, 118, 128);
+    font-size: 22px;
+    color: rgb(92, 92, 104);
     -unity-text-align: lower-left;
 }
 
@@ -160,25 +142,27 @@
 
 .notepad__answer {
     height: 36px;
-    margin: 0;
-    padding: 0;
+    flex-direction: row;
+    align-items: flex-end;
 }
 
-.notepad__answer .unity-base-text-field__input {
+.notepad__answer-text {
     height: 36px;
-    margin: 0;
-    padding: 0 0 2px 2px;
-    border-width: 0;
-    background-color: rgba(0, 0, 0, 0);
+    padding: 0 2px 3px 2px;
     font-size: 28px;
     color: rgb(30, 40, 72);
     -unity-text-align: lower-left;
-    --unity-cursor-color: rgb(30, 40, 72);
-    --unity-selection-color: rgba(70, 100, 170, 0.25);
 }
 
-.notepad__answer .unity-base-text-field__input--placeholder {
-    color: rgba(30, 40, 72, 0.32);
+.notepad__answer-text--placeholder {
+    color: rgba(30, 40, 72, 0.3);
+}
+
+.notepad__caret {
+    width: 2px;
+    height: 26px;
+    margin-bottom: 7px;
+    background-color: rgb(30, 40, 72);
 }
 
 .notepad__footer {
@@ -190,17 +174,17 @@
     color: rgb(150, 150, 160);
 }
 
-/* The Morse key: a sticky note that turns up stuck to the top of the page, clear of the orb. */
+/* The Morse key: a sticky note that turns up stuck on the lower part of the page. */
 
 .sticky {
     position: absolute;
-    left: 36px;
-    top: -318px;
+    right: 24px;
+    bottom: 66px;
     width: 272px;
     padding: 14px 20px 16px 22px;
     border-radius: 2px;
     background-color: rgb(247, 224, 116);
-    rotate: -3deg;
+    rotate: 3deg;
     opacity: 0;
     scale: 1.25 1.25;
     transition-property: opacity, scale;
