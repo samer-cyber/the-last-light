@@ -1,0 +1,255 @@
+/* The notepad: a sheet of ruled paper that comes up from the bottom right.
+   Every row of writing is 36px tall, the spacing of the ruled lines drawn in Notepad.cs. */
+
+.notepad {
+    position: absolute;
+    right: 72px;
+    bottom: 40px;
+    width: 640px;
+    height: 684px;
+    opacity: 0;
+    translate: 0 112%;
+    rotate: 3deg;
+    transition-property: translate, rotate, opacity;
+    transition-duration: 0.5s, 0.6s, 0.25s;
+    transition-timing-function: ease-out-cubic, ease-out-cubic, linear;
+}
+
+.notepad--open {
+    opacity: 1;
+    translate: 0 0;
+    rotate: -1.5deg;
+}
+
+.notepad__shadow {
+    position: absolute;
+    left: 14px;
+    top: 20px;
+    right: -14px;
+    bottom: -18px;
+    border-radius: 8px;
+    background-color: rgba(0, 0, 0, 0.5);
+}
+
+.notepad__page {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    padding: 36px 36px 0 80px;
+    border-radius: 3px;
+    background-color: rgb(244, 239, 226);
+    background-size: 100% 100%;
+    overflow: hidden;
+}
+
+.notepad__date {
+    height: 36px;
+    padding-bottom: 5px;
+    font-size: 20px;
+    color: rgb(118, 118, 128);
+    -unity-text-align: lower-right;
+}
+
+.notepad__note {
+    height: 36px;
+    padding-bottom: 5px;
+    font-size: 20px;
+    color: rgb(118, 118, 128);
+    -unity-text-align: lower-left;
+}
+
+.notepad__log {
+    min-height: 108px;
+}
+
+.notepad__row {
+    flex-direction: row;
+    flex-wrap: wrap;
+}
+
+/* The marks the hand makes: each sits in a cell one ruled line tall. */
+
+.ink-cell {
+    height: 36px;
+    margin-right: 5px;
+    justify-content: center;
+}
+
+.ink-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 4px;
+    background-color: rgb(30, 40, 72);
+}
+
+.ink-dash {
+    width: 17px;
+    height: 5px;
+    border-radius: 3px;
+    background-color: rgb(30, 40, 72);
+}
+
+.ink-dot,
+.ink-dash {
+    transform-origin: 0% 50%;
+    transition-property: opacity, scale;
+    transition-duration: 0.12s, 0.18s;
+    transition-timing-function: linear, ease-out-sine;
+}
+
+.ink--fresh {
+    opacity: 0;
+    scale: 0.2 1;
+}
+
+.ink-gap {
+    width: 11px;
+    height: 36px;
+}
+
+.ink-slash {
+    height: 36px;
+    margin: 0 8px 0 1px;
+    font-size: 26px;
+    color: rgb(120, 120, 128);
+    -unity-text-align: middle-center;
+}
+
+.notepad__guess {
+    height: 36px;
+    align-self: flex-start;
+}
+
+.notepad__guess-text {
+    height: 36px;
+    padding: 0 4px 3px 2px;
+    font-size: 28px;
+    color: rgb(30, 40, 72);
+    -unity-text-align: lower-left;
+}
+
+.strike,
+.underline {
+    position: absolute;
+    height: 3px;
+    border-radius: 2px;
+    background-color: rgb(30, 40, 72);
+    transform-origin: 0% 50%;
+    transition-property: scale;
+    transition-duration: 0.3s;
+    transition-timing-function: ease-out-sine;
+}
+
+.strike {
+    left: -4px;
+    right: -6px;
+    top: 56%;
+}
+
+.underline {
+    left: -2px;
+    right: -10px;
+    bottom: 1px;
+}
+
+.line--fresh {
+    scale: 0 1;
+}
+
+.notepad__answer {
+    height: 36px;
+    margin: 0;
+    padding: 0;
+}
+
+.notepad__answer .unity-base-text-field__input {
+    height: 36px;
+    margin: 0;
+    padding: 0 0 2px 2px;
+    border-width: 0;
+    background-color: rgba(0, 0, 0, 0);
+    font-size: 28px;
+    color: rgb(30, 40, 72);
+    -unity-text-align: lower-left;
+    --unity-cursor-color: rgb(30, 40, 72);
+    --unity-selection-color: rgba(70, 100, 170, 0.25);
+}
+
+.notepad__answer .unity-base-text-field__input--placeholder {
+    color: rgba(30, 40, 72, 0.32);
+}
+
+.notepad__footer {
+    position: absolute;
+    left: 80px;
+    right: 36px;
+    bottom: 14px;
+    font-size: 16px;
+    color: rgb(150, 150, 160);
+}
+
+/* The Morse key: a sticky note that turns up stuck to the top of the page, clear of the orb. */
+
+.sticky {
+    position: absolute;
+    left: 36px;
+    top: -318px;
+    width: 272px;
+    padding: 14px 20px 16px 22px;
+    border-radius: 2px;
+    background-color: rgb(247, 224, 116);
+    rotate: -3deg;
+    opacity: 0;
+    scale: 1.25 1.25;
+    transition-property: opacity, scale;
+    transition-duration: 0.35s, 0.45s;
+    transition-timing-function: linear, ease-out-back;
+}
+
+.sticky--shown {
+    opacity: 1;
+    scale: 1 1;
+}
+
+.sticky__title {
+    margin-bottom: 4px;
+    font-size: 22px;
+    color: rgb(30, 40, 72);
+}
+
+.sticky__grid {
+    flex-direction: row;
+    flex-wrap: wrap;
+}
+
+.sticky__cell {
+    width: 50%;
+    height: 24px;
+    flex-direction: row;
+    align-items: center;
+}
+
+.sticky__letter {
+    width: 24px;
+    font-size: 19px;
+    color: rgb(30, 40, 72);
+    -unity-text-align: middle-left;
+}
+
+.key-dot {
+    width: 6px;
+    height: 6px;
+    margin-right: 4px;
+    border-radius: 3px;
+    background-color: rgb(30, 40, 72);
+}
+
+.key-dash {
+    width: 15px;
+    height: 4px;
+    margin-right: 4px;
+    border-radius: 2px;
+    background-color: rgb(30, 40, 72);
+}
