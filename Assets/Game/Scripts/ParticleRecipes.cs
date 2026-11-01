@@ -8,8 +8,8 @@ namespace Game
     /// </summary>
     public static class ParticleRecipes
     {
-        /// <summary>A thick, slowly turning disc of dust around the orb, sinking inward.</summary>
-        public static void Dust(ParticleSystem ps, float radius)
+        /// <summary>A thin disc of dust turning around the orb and sinking inward; centre and half-width in metres.</summary>
+        public static void Dust(ParticleSystem ps, float centre, float width)
         {
             Clear(ps);
             var main = ps.main;
@@ -19,34 +19,34 @@ namespace Game
             main.playOnAwake = true;
             main.startLifetime = new ParticleSystem.MinMaxCurve(16f, 26f);
             main.startSpeed = 0f;
-            main.startSize = new ParticleSystem.MinMaxCurve(0.05f, 0.18f);
-            main.startColor = new ParticleSystem.MinMaxGradient(new Color(0.85f, 0.45f, 1f), new Color(0.35f, 0.7f, 1f));
-            main.maxParticles = 8000;
+            main.startSize = new ParticleSystem.MinMaxCurve(0.035f, 0.11f);
+            main.startColor = new ParticleSystem.MinMaxGradient(new Color(0.85f, 0.5f, 1f), new Color(0.4f, 0.75f, 1f));
+            main.maxParticles = 7000;
             main.simulationSpace = ParticleSystemSimulationSpace.Local;
 
             var emission = ps.emission;
             emission.enabled = true;
-            emission.rateOverTime = 300f;
+            emission.rateOverTime = 220f;
 
             var shape = ps.shape;
             shape.enabled = true;
             shape.shapeType = ParticleSystemShapeType.Donut;
-            shape.radius = radius * 2.3f;
-            shape.donutRadius = radius * 0.8f;
+            shape.radius = centre;
+            shape.donutRadius = width;
             shape.radiusThickness = 1f;
             shape.rotation = new Vector3(90f, 0f, 0f);
-            shape.scale = new Vector3(1f, 1f, 0.35f);
+            shape.scale = new Vector3(1f, 1f, 0.1f);
 
             var velocity = ps.velocityOverLifetime;
             velocity.enabled = true;
             velocity.space = ParticleSystemSimulationSpace.Local;
             // All three orbital curves must be in the same mode.
             velocity.orbitalX = new ParticleSystem.MinMaxCurve(0f, 0f);
-            velocity.orbitalY = new ParticleSystem.MinMaxCurve(0.06f, 0.16f);
+            velocity.orbitalY = new ParticleSystem.MinMaxCurve(0.12f, 0.3f);
             velocity.orbitalZ = new ParticleSystem.MinMaxCurve(0f, 0f);
-            velocity.radial = new ParticleSystem.MinMaxCurve(-0.25f);
+            velocity.radial = new ParticleSystem.MinMaxCurve(-0.2f);
 
-            Drift(ps, 0.35f, 0.12f);
+            Drift(ps, 0.12f, 0.3f);
             Fade(ps, 0.15f, 0.85f);
             Billboards(ps, 0.5f);
         }
@@ -64,17 +64,17 @@ namespace Game
             main.startSpeed = 0f;
             main.startSize = new ParticleSystem.MinMaxCurve(0.03f, 0.09f);
             main.startColor = new ParticleSystem.MinMaxGradient(new Color(0.7f, 0.6f, 1f, 0.6f), new Color(0.5f, 0.8f, 1f, 0.6f));
-            main.maxParticles = 3000;
+            main.maxParticles = 1500;
             main.simulationSpace = ParticleSystemSimulationSpace.Local;
 
             var emission = ps.emission;
             emission.enabled = true;
-            emission.rateOverTime = 140f;
+            emission.rateOverTime = 60f;
 
             var shape = ps.shape;
             shape.enabled = true;
             shape.shapeType = ParticleSystemShapeType.Sphere;
-            shape.radius = radius * 2.8f;
+            shape.radius = radius;
             shape.radiusThickness = 0.6f;
 
             var velocity = ps.velocityOverLifetime;

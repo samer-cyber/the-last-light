@@ -38,6 +38,10 @@ namespace Game
 
         VisualElement sheet, page, log, guesses, key, row, lastGuess;
         TextField answer;
+        // Typing is taken only once the page is up and every key held when it opened is let go,
+        // so a key held to drift (W, A, S, D) does not type itself onto the page.
+        bool armed;
+        float openedAt;
         readonly System.Random hand = new System.Random(11);
 
         void Start()
@@ -66,23 +70,35 @@ namespace Game
                 }
                 else if (IsOpen && keys.escapeKey.wasPressedThisFrame) Close();
             }
-            if (IsOpen) SecondsOpen += Time.deltaTime;
+            if (!IsOpen) return;
+            SecondsOpen += Time.deltaTime;
+            if (!armed && Time.time - openedAt > RaiseSeconds && (keys == null || !keys.anyKey.isPressed))
+            {
+                armed = true;
+                answer.SetValueWithoutNotify("");
+                answer.Focus();
+            }
         }
+
+        /// <summary>How long the page takes to come up (Notepad.uss, .notepad translate).</summary>
+        const float RaiseSeconds = 0.45f;
 
         public void Open()
         {
             if (IsOpen || !Available) return;
             IsOpen = HasBeenOpened = true;
+            armed = false;
+            openedAt = Time.time;
             sheet.AddToClassList("notepad--open");
             player.Writing = true;
             Play(openClip);
-            answer.schedule.Execute(() => answer.Focus()).ExecuteLater(60);
         }
 
         public void Close()
         {
             if (!IsOpen) return;
             IsOpen = false;
+            armed = false;
             sheet.RemoveFromClassList("notepad--open");
             answer.Blur();
             player.Writing = false;
@@ -187,6 +203,11 @@ namespace Game
 
         void OnAnswerKey(KeyDownEvent evt)
         {
+            if (!armed)
+            {
+                evt.StopImmediatePropagation();
+                return;
+            }
             if (evt.keyCode != KeyCode.Return && evt.keyCode != KeyCode.KeypadEnter) return;
             evt.StopPropagation();
             string text = answer.value.Trim();

@@ -7,8 +7,8 @@ Material:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: Orb Shell
-  m_Shader: {fileID: 4800000, guid: 168364ad23fdca54a964deff5f181f0d, type: 3}
+  m_Name: Warp
+  m_Shader: {fileID: 4800000, guid: 74f1279873a9d844eb74fdd23375c1b7, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords: []
@@ -24,14 +24,7 @@ Material:
     serializedVersion: 3
     m_TexEnvs: []
     m_Ints: []
-    m_Floats:
-    - _Flow: 0.1
-    - _Instability: 0
-    - _Intensity: 1
-    - _Pulse: 0
-    - _Scale: 2.6
-    m_Colors:
-    - _Accent: {r: 1, g: 0.29999998, b: 0.85, a: 1}
-    - _Color: {r: 0.29999998, g: 0.54999995, b: 1, a: 1}
+    m_Floats: []
+    m_Colors: []
   m_BuildTextureStacks: []
   m_AllowLocking: 1

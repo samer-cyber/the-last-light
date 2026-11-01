@@ -25,16 +25,16 @@ Material:
     m_TexEnvs: []
     m_Ints: []
     m_Floats:
-    - _Flow: 0.07
+    - _Flow: 0.12
     - _Instability: 0
-    - _Intensity: 1.4
+    - _Intensity: 6
     - _Pulse: 0
-    - _Scale: 2
-    - _Swirl: 2.4
+    - _Scale: 1.6
+    - _Swirl: 3
     m_Colors:
-    - _Core: {r: 1, g: 0.93, b: 0.82, a: 1}
-    - _Deep: {r: 0.02, g: 0, b: 0.06999998, a: 1}
-    - _Hot: {r: 0.19999996, g: 0.75, b: 1, a: 1}
-    - _Mid: {r: 0.5, g: 0.059999965, b: 0.7, a: 1}
+    - _Core: {r: 1, g: 1, b: 1, a: 1}
+    - _Deep: {r: 0.22, g: 0.16, b: 0.75, a: 1}
+    - _Hot: {r: 0.72, g: 0.92, b: 1, a: 1}
+    - _Mid: {r: 0.5, g: 0.42, b: 1, a: 1}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

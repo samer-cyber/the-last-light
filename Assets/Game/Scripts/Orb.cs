@@ -3,32 +3,31 @@ using UnityEngine;
 namespace Game
 {
     /// <summary>
-    /// The orb: lights its body with the Morse message, bends space around itself, sends a ring
-    /// out with each symbol and keeps its dust turning. The director raises its instability until
-    /// it collapses and bursts.
+    /// The orb: a tiny, blinding core of everything there will be, growing slowly, bending space
+    /// around it (through <see cref="SpaceWarp"/>) and lighting its dust with every symbol of the
+    /// message. The director raises its instability until it collapses and bursts.
     /// </summary>
     public class Orb : MonoBehaviour
     {
         static readonly int PulseId = Shader.PropertyToID("_Pulse");
         static readonly int InstabilityId = Shader.PropertyToID("_Instability");
         static readonly int IntensityId = Shader.PropertyToID("_Intensity");
-        static readonly int OrbRadiusId = Shader.PropertyToID("_OrbRadius");
-        static readonly int EinsteinId = Shader.PropertyToID("_Einstein");
 
         [SerializeField] MorseEmitter emitter;
-        [SerializeField] Transform body;
+        [SerializeField] SpaceWarp warp;
+        [SerializeField, Tooltip("Scaled to the core's diameter; the core, corona and glow sit under it.")] Transform body;
         [SerializeField] Renderer core;
-        [SerializeField] Renderer shell;
-        [SerializeField] Renderer halo;
-        [SerializeField] Renderer lens;
+        [SerializeField] Renderer corona;
+        [SerializeField] Renderer glow;
         [SerializeField] ParticleSystem dust;
         [SerializeField] ParticleSystem haze;
         [SerializeField] ParticleSystem rings;
         [SerializeField] ParticleSystem burst;
-        [SerializeField] float radius = 8f;
-        [SerializeField, Tooltip("Radius of the ring of bent light, in orb radii.")] float einstein = 1.3f;
+        [SerializeField, Tooltip("Core radius at the start, in metres.")] float startRadius = 0.4f;
+        [SerializeField, Tooltip("Radius it grows toward, in metres.")] float grownRadius = 0.85f;
+        [SerializeField, Tooltip("Seconds to grow most of the way.")] float growTime = 240f;
         [SerializeField] Color dotRing = new Color(0.55f, 0.8f, 1f);
-        [SerializeField] Color dashRing = new Color(1f, 0.55f, 1f);
+        [SerializeField] Color dashRing = new Color(0.85f, 0.6f, 1f);
 
         /// <summary>0 calm, 1 about to break.</summary>
         public float Instability { get; set; }
@@ -38,16 +37,19 @@ namespace Game
         public float Collapse { get; set; }
         /// <summary>How much harder it bends space than at rest.</summary>
         public float Warp { get; set; } = 1f;
+        /// <summary>Extra size while it gathers itself, 0 to 1.</summary>
+        public float Swell { get; set; }
         /// <summary>How much faster the dust falls in than at rest.</summary>
         public float Pull { get; set; } = 1f;
         /// <summary>How much faster the dust turns than at rest.</summary>
         public float Spin { get; set; } = 1f;
 
-        public float Radius => radius;
+        /// <summary>The core's radius now, in metres.</summary>
+        public float Radius { get; private set; }
         public float Pulse { get; private set; }
 
-        Material coreMat, shellMat, haloMat, lensMat;
-        float coreIntensity, shellIntensity, haloIntensity;
+        Material coreMat, coronaMat, glowMat, dustMat;
+        float coreIntensity, coronaIntensity, glowIntensity, dustIntensity;
         float dustInflow, hazeInflow;
         ParticleSystem.MinMaxCurve dustTurn, hazeTurn;
         float dim, stir;
@@ -55,16 +57,18 @@ namespace Game
         void Awake()
         {
             coreMat = core.material;
-            shellMat = shell.material;
-            haloMat = halo.material;
-            lensMat = lens.material;
+            coronaMat = corona.material;
+            glowMat = glow.material;
+            dustMat = dust.GetComponent<ParticleSystemRenderer>().material;
             coreIntensity = coreMat.GetFloat(IntensityId);
-            shellIntensity = shellMat.GetFloat(IntensityId);
-            haloIntensity = haloMat.GetFloat(IntensityId);
+            coronaIntensity = coronaMat.GetFloat(IntensityId);
+            glowIntensity = glowMat.GetFloat(IntensityId);
+            dustIntensity = dustMat.GetFloat(IntensityId);
             dustInflow = dust.velocityOverLifetime.radial.constant;
             hazeInflow = haze.velocityOverLifetime.radial.constant;
             dustTurn = dust.velocityOverLifetime.orbitalY;
             hazeTurn = haze.velocityOverLifetime.orbitalY;
+            Radius = startRadius;
         }
 
         void OnEnable()
@@ -79,24 +83,25 @@ namespace Game
 
         void OnStep(MorseCode.StepKind kind)
         {
-            if (kind == MorseCode.StepKind.Dot) Ring(dotRing, 1.3f);
-            else if (kind == MorseCode.StepKind.Dash) Ring(dashRing, 2.2f);
+            if (kind == MorseCode.StepKind.Dot) Send(dotRing, 1.3f, 0.010f);
+            else if (kind == MorseCode.StepKind.Dash) Send(dashRing, 2.2f, 0.018f);
         }
 
-        /// <summary>Sends a ring of light out from the surface.</summary>
-        public void Ring(Color colour, float seconds)
+        /// <summary>Sends a wave out from the ring of bent light: a faint ring of light and a ripple in space.</summary>
+        void Send(Color colour, float seconds, float ripple)
         {
             var emit = new ParticleSystem.EmitParams
             {
                 position = Vector3.zero,
                 applyShapeToPosition = false,
                 velocity = Vector3.zero,
-                // The ring texture's ring sits at 0.43 of its width; start it on the surface.
-                startSize = body.localScale.x * 0.5f / 0.43f,
+                // The ring texture's ring sits at 0.43 of its width.
+                startSize = warp.RingRadius * 0.8f / 0.43f,
                 startLifetime = seconds,
                 startColor = colour,
             };
             rings.Emit(emit, 1);
+            warp.Ripple(ripple);
         }
 
         /// <summary>Darkens for a moment, as if it heard something wrong.</summary>
@@ -106,13 +111,14 @@ namespace Game
         public void Stir()
         {
             stir = 1f;
-            Ring(dashRing, 1.6f);
+            Send(dashRing, 1.6f, 0.03f);
         }
 
-        /// <summary>The end of it: the orb is gone, and its light and dust fly outward.</summary>
+        /// <summary>The end of it: the orb is gone, space lets go, and light and dust fly outward.</summary>
         public void Explode()
         {
             body.gameObject.SetActive(false);
+            warp.Strength = 0f;
             dust.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
             haze.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
             rings.Clear();
@@ -127,17 +133,21 @@ namespace Game
             float flicker = stir * Mathf.PerlinNoise(t * 18f, 2.1f);
             Pulse = Mathf.Clamp01(emitter.Envelope + Flare + flicker) * (1f - 0.7f * dim);
 
-            float shiver = Instability * Instability * (Mathf.PerlinNoise(t * 13f, 0.4f) - 0.5f) * 0.05f;
-            float breathe = 1f + 0.012f * Mathf.Sin(t * 0.8f) + 0.025f * Pulse + shiver;
-            float diameter = 2f * radius * breathe * Mathf.Lerp(1f, 0.01f, Collapse);
-            body.localScale = Vector3.one * diameter;
+            // It grows slowly while the player watches, more as it gathers itself, and falls to a point at the end.
+            float grown = Mathf.Lerp(startRadius, grownRadius, 1f - Mathf.Exp(-Time.timeSinceLevelLoad / growTime));
+            float shiver = Instability * Instability * (Mathf.PerlinNoise(t * 13f, 0.4f) - 0.5f) * 0.12f;
+            float breathe = 1f + 0.02f * Mathf.Sin(t * 0.9f) + 0.06f * Pulse + shiver;
+            Radius = grown * (1f + 0.8f * Swell) * breathe * Mathf.Lerp(1f, 0.02f, Collapse);
+            body.localScale = Vector3.one * (2f * Radius);
 
-            float glow = 1f - 0.5f * dim;
-            Drive(coreMat, coreIntensity * glow);
-            Drive(shellMat, shellIntensity * glow);
-            Drive(haloMat, haloIntensity * glow * (1f + 2f * Collapse));
-            lensMat.SetFloat(OrbRadiusId, diameter * 0.5f);
-            lensMat.SetFloat(EinsteinId, einstein * Warp * (1f + 0.15f * Pulse));
+            float light = 1f - 0.5f * dim;
+            Drive(coreMat, coreIntensity * light);
+            Drive(coronaMat, coronaIntensity * light);
+            Drive(glowMat, glowIntensity * light * (1f + 3f * Collapse));
+            dustMat.SetFloat(IntensityId, dustIntensity * (1f + 1.1f * Pulse) * light);
+
+            if (warp.Strength > 0f) warp.Strength = Warp * (1f + 0.2f * Pulse);
+            warp.CoreRadius = Radius;
 
             var dustVelocity = dust.velocityOverLifetime;
             dustVelocity.radial = dustInflow * Pull;

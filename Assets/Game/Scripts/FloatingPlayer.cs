@@ -16,7 +16,7 @@ namespace Game
         [SerializeField] float thrust = 3f;
         [SerializeField] float maxSpeed = 5f;
         [SerializeField, Tooltip("How quickly drifting dies away, per second.")] float damping = 1.1f;
-        [SerializeField, Tooltip("Closest the player may come to the orb's centre.")] float nearest = 15f;
+        [SerializeField, Tooltip("Closest the player may come to the orb's centre.")] float nearest = 3f;
         [SerializeField, Tooltip("Farthest the player may drift from it.")] float farthest = 150f;
 
         /// <summary>The notepad is up: no looking or moving, and the cursor is free.</summary>
@@ -142,6 +142,9 @@ namespace Game
             Vector3 toward = (point - transform.position).normalized * speed;
             velocity = Vector3.Lerp(velocity, toward, 1f - Mathf.Exp(-2f * Time.deltaTime));
         }
+
+        /// <summary>Adds to the drift, in metres per second.</summary>
+        public void Push(Vector3 impulse) => velocity += impulse;
 
         /// <summary>A sudden jolt that settles.</summary>
         public void Kick(float amount) => kick = Mathf.Max(kick, amount);

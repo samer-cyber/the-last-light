@@ -21,9 +21,12 @@ namespace Game.Building
     {
         const string Root = "Assets/Game";
         const string ScenePath = Root + "/Scenes/Opening.unity";
-        const float OrbRadius = 8f;
-        const float HaloScale = 3.2f;   // in orb diameters
-        const float LensScale = 6f;
+        const float CoreRadius = 0.4f;   // at the start; the orb grows slowly
+        const float CoronaScale = 12f;   // billboard sizes, in core diameters
+        const float GlowScale = 6f;
+        const float DiskCentre = 6.5f;   // the dust disc: centre line and half-width, metres
+        const float DiskWidth = 4.5f;
+        const float HazeRadius = 7f;
 
         [MenuItem("Game/Build Opening Scene")]
         public static void Build()
@@ -38,17 +41,35 @@ namespace Game.Building
             var billboard = MakeBillboard();
 
             var sky = MakeMaterial("Void Sky", "Game/VoidSky");
-            var coreMat = MakeMaterial("Orb Core", "Game/OrbCore", m => m.SetFloat("_Intensity", 1.4f));
-            var shellMat = MakeMaterial("Orb Shell", "Game/OrbShell", m => m.SetFloat("_Intensity", 1f));
-            var haloMat = MakeMaterial("Orb Halo", "Game/Halo", m =>
+            foreach (string old in new[] { "Materials/Orb Shell.mat", "Materials/Orb Lens.mat", "Materials/Orb Halo.mat", "Shaders/OrbShell.shader", "Shaders/Lens.shader" })
+                AssetDatabase.DeleteAsset($"{Root}/{old}");
+            var coreMat = MakeMaterial("Orb Core", "Game/OrbCore", m =>
             {
-                m.SetFloat("_Edge", 1f / HaloScale);
-                m.SetFloat("_Intensity", 0.45f);
+                m.SetColor("_Deep", new Color(0.22f, 0.16f, 0.75f));
+                m.SetColor("_Mid", new Color(0.5f, 0.42f, 1f));
+                m.SetColor("_Hot", new Color(0.72f, 0.92f, 1f));
+                m.SetColor("_Core", Color.white);
+                m.SetFloat("_Intensity", 6f);
+                m.SetFloat("_Scale", 1.6f);
+                m.SetFloat("_Flow", 0.12f);
+                m.SetFloat("_Swirl", 3f);
             });
-            var lensMat = MakeMaterial("Orb Lens", "Game/Lens");
+            var coronaMat = MakeMaterial("Orb Corona", "Game/Corona", m =>
+            {
+                m.SetFloat("_Edge", 1f / CoronaScale);
+                m.SetFloat("_Intensity", 1.6f);
+            });
+            var glowMat = MakeMaterial("Orb Glow", "Game/Halo", m =>
+            {
+                m.SetFloat("_Edge", 1f / GlowScale);
+                m.SetFloat("_Intensity", 1.2f);
+                m.SetColor("_Color", new Color(0.55f, 0.5f, 1f));
+            });
+            int orbLight = EnsureLayer("OrbLight");
+            AddRenderPasses(MakeMaterial("Warp", "Game/Warp"), orbLight);
             var dustMat = MakeParticleMaterial("Dust", softDot, 2.2f);
             var hazeMat = MakeParticleMaterial("Haze", softDot, 1.2f);
-            var ringMat = MakeParticleMaterial("Ring", ring, 1.2f);
+            var ringMat = MakeParticleMaterial("Ring", ring, 0.6f);
             var burstMat = MakeParticleMaterial("Burst", softDot, 6f);
             var moteMat = MakeParticleMaterial("Mote", softDot, 0.8f);
 
@@ -66,26 +87,28 @@ namespace Game.Building
             var emitter = orbObject.AddComponent<MorseEmitter>();
             var body = new GameObject("Body").transform;
             body.SetParent(orbObject.transform, false);
-            body.localScale = Vector3.one * (2f * OrbRadius);
+            body.localScale = Vector3.one * (2f * CoreRadius);
             var core = MakePart("Core", body, sphere, coreMat, 1f);
-            var shell = MakePart("Shell", body, sphere, shellMat, 1.035f);
-            var halo = MakePart("Halo", body, billboard, haloMat, HaloScale);
-            var lens = MakePart("Lens", body, billboard, lensMat, LensScale);
+            var corona = MakePart("Corona", body, billboard, coronaMat, CoronaScale);
+            var glow = MakePart("Glow", body, billboard, glowMat, GlowScale);
             var dust = MakeParticles("Dust", orbObject.transform, dustMat);
-            ParticleRecipes.Dust(dust, OrbRadius);
+            ParticleRecipes.Dust(dust, DiskCentre, DiskWidth);
             var haze = MakeParticles("Haze", orbObject.transform, hazeMat);
-            ParticleRecipes.Haze(haze, OrbRadius);
+            ParticleRecipes.Haze(haze, HazeRadius);
             var rings = MakeParticles("Rings", orbObject.transform, ringMat);
             ParticleRecipes.Rings(rings);
             var burst = MakeParticles("Burst", orbObject.transform, burstMat);
-            ParticleRecipes.Burst(burst, OrbRadius);
+            ParticleRecipes.Burst(burst, CoreRadius);
+            // The orb's own light is drawn after the warp (see AddRenderPasses), so it does not bend into itself.
+            foreach (var lit in new Component[] { corona, glow, rings }) lit.gameObject.layer = orbLight;
+            var warp = orbObject.AddComponent<SpaceWarp>();
             var orb = orbObject.AddComponent<Orb>();
-            Wire(orb, ("emitter", emitter), ("body", body), ("core", core), ("shell", shell), ("halo", halo), ("lens", lens),
+            Wire(orb, ("emitter", emitter), ("warp", warp), ("body", body), ("core", core), ("corona", corona), ("glow", glow),
                 ("dust", dust), ("haze", haze), ("rings", rings), ("burst", burst));
 
-            // The player, a little above the orb's equator, facing it.
+            // The player, a little above the dust disc, facing the orb.
             var playerObject = new GameObject("Player");
-            playerObject.transform.position = new Vector3(0f, 3f, -42f);
+            playerObject.transform.position = new Vector3(0f, 3.5f, -30f);
             Vector3 toOrb = orbObject.transform.position - playerObject.transform.position;
             playerObject.transform.rotation = Quaternion.LookRotation(new Vector3(toOrb.x, 0f, toOrb.z));
             var cameraObject = new GameObject("Main Camera") { tag = "MainCamera" };
@@ -110,6 +133,7 @@ namespace Game.Building
             ParticleRecipes.Motes(motes);
             var player = playerObject.AddComponent<FloatingPlayer>();
             Wire(player, ("view", camera), ("orb", orbObject.transform));
+            Wire(warp, ("view", camera));
 
             var volumeObject = new GameObject("Global Volume");
             var volume = volumeObject.AddComponent<Volume>();
@@ -263,6 +287,73 @@ namespace Game.Building
             setUp?.Invoke(material);
             EditorUtility.SetDirty(material);
             return material;
+        }
+
+        /// <summary>
+        /// Sets up the PC renderer: the full-screen warp, then the orb's own light (its layer, left out
+        /// of the ordinary transparent pass) drawn on top of the bent image. Safe to run again.
+        /// </summary>
+        static void AddRenderPasses(Material warpMaterial, int orbLightLayer)
+        {
+            const string rendererPath = "Assets/Settings/PC_Renderer.asset";
+            var renderer = AssetDatabase.LoadAssetAtPath<UniversalRendererData>(rendererPath) ?? throw new InvalidOperationException($"No renderer at {rendererPath}");
+
+            var warp = AddFeature<FullScreenPassRendererFeature>(renderer, "Warp");
+            warp.passMaterial = warpMaterial;
+            warp.injectionPoint = FullScreenPassRendererFeature.InjectionPoint.BeforeRenderingPostProcessing;
+            warp.requirements = ScriptableRenderPassInput.Color | ScriptableRenderPassInput.Depth;
+            warp.fetchColorBuffer = true;
+            warp.SetActive(true);
+
+            var light = AddFeature<RenderObjects>(renderer, "Orb Light");
+            light.settings.Event = RenderPassEvent.BeforeRenderingPostProcessing;
+            light.settings.filterSettings.RenderQueueType = RenderQueueType.Transparent;
+            light.settings.filterSettings.LayerMask = 1 << orbLightLayer;
+            light.SetActive(true);
+
+            renderer.transparentLayerMask = ~(1 << orbLightLayer);
+            EditorUtility.SetDirty(warp);
+            EditorUtility.SetDirty(light);
+            EditorUtility.SetDirty(renderer);
+            AssetDatabase.SaveAssets();
+        }
+
+        /// <summary>The renderer's feature of that type and name, added at the end of its list if missing.</summary>
+        static T AddFeature<T>(UniversalRendererData renderer, string name) where T : ScriptableRendererFeature
+        {
+            var feature = renderer.rendererFeatures.OfType<T>().FirstOrDefault(f => f.name == name);
+            if (feature != null) return feature;
+            feature = ScriptableObject.CreateInstance<T>();
+            feature.name = name;
+            AssetDatabase.AddObjectToAsset(feature, renderer);
+            AssetDatabase.TryGetGUIDAndLocalFileIdentifier(feature, out string _, out long localId);
+            // The renderer keeps a list of its features and a parallel list of their file ids.
+            var serialized = new SerializedObject(renderer);
+            var features = serialized.FindProperty("m_RendererFeatures");
+            var map = serialized.FindProperty("m_RendererFeatureMap");
+            features.arraySize++;
+            features.GetArrayElementAtIndex(features.arraySize - 1).objectReferenceValue = feature;
+            map.arraySize++;
+            map.GetArrayElementAtIndex(map.arraySize - 1).longValue = localId;
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+            return feature;
+        }
+
+        /// <summary>The index of a named layer, added in the first free user slot if missing.</summary>
+        static int EnsureLayer(string name)
+        {
+            var tags = new SerializedObject(AssetDatabase.LoadAllAssetsAtPath("ProjectSettings/TagManager.asset")[0]);
+            var layers = tags.FindProperty("layers");
+            for (int i = 8; i < layers.arraySize; i++)
+                if (layers.GetArrayElementAtIndex(i).stringValue == name) return i;
+            for (int i = 8; i < layers.arraySize; i++)
+            {
+                if (!string.IsNullOrEmpty(layers.GetArrayElementAtIndex(i).stringValue)) continue;
+                layers.GetArrayElementAtIndex(i).stringValue = name;
+                tags.ApplyModifiedPropertiesWithoutUndo();
+                return i;
+            }
+            throw new InvalidOperationException("No free layer for " + name);
         }
 
         static Material MakeParticleMaterial(string name, Texture2D texture, float intensity) =>

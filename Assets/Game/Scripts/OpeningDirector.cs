@@ -23,12 +23,15 @@ namespace Game
         [SerializeField] Hud hud;
         [SerializeField] Volume volume;
         [SerializeField] AudioSource drone;
+        [SerializeField, Tooltip("The roar of bent space, louder as the player nears the orb.")] AudioSource nearSound;
         [SerializeField] AudioSource effects;
         [SerializeField] AudioClip risingClip;
         [SerializeField, Tooltip("Swells to its loudest at the end of the collapse: the explosion played backwards.")] AudioClip gatherClip;
         [SerializeField] AudioClip breakClip;
         [SerializeField, Range(0f, 1f)] float droneVolume = 0.12f;
         [SerializeField, Range(0f, 1f)] float risingVolume = 0.6f;
+        [SerializeField, Range(0f, 1f)] float nearVolume = 0.8f;
+        [SerializeField, Tooltip("Distance at which the orb starts to be felt, and at which it is felt fully, in metres.")] Vector2 feltBetween = new Vector2(28f, 4f);
         [SerializeField, Tooltip("Seconds without opening the notepad before the first hint about the message.")] float hintAfter = 24f;
         [SerializeField, Tooltip("Seconds with the notepad up before the Morse key turns up.")] float keyAfter = 40f;
         [SerializeField, Tooltip("The words on the white after the flash.")] string afterwards = "13.8 billion years ago";
@@ -43,7 +46,8 @@ namespace Game
         LensDistortion distortion;
         ColorAdjustments grading;
         FilmGrain grain;
-        float bloomRest, aberrationRest, grainRest;
+        Vignette vignette;
+        float bloomRest, aberrationRest, grainRest, vignetteRest, fovRest;
 
         void Start()
         {
@@ -53,10 +57,19 @@ namespace Game
             profile.TryGet(out distortion);
             profile.TryGet(out grading);
             profile.TryGet(out grain);
+            profile.TryGet(out vignette);
             bloomRest = bloom.intensity.value;
             aberrationRest = aberration.intensity.value;
             grainRest = grain.intensity.value;
+            vignetteRest = vignette.intensity.value;
+            fovRest = player.View.fieldOfView;
+            if (nearSound && nearSound.clip)
+            {
+                nearSound.volume = 0f;
+                nearSound.Play();
+            }
             notepad.Guessed += OnGuess;
+            emitter.StepStarted += OnSymbol;
             StartCoroutine(Arrive());
             StartCoroutine(Hints());
         }
@@ -64,10 +77,12 @@ namespace Game
         void OnDestroy()
         {
             if (notepad) notepad.Guessed -= OnGuess;
+            if (emitter) emitter.StepStarted -= OnSymbol;
         }
 
         void Update()
         {
+            if (phase == Phase.Arriving || phase == Phase.Listening) FeelTheOrb();
             if (phase == Phase.Listening && !keyShown && (misses > 0 || notepad.SecondsOpen > keyAfter))
             {
                 keyShown = true;
@@ -86,6 +101,37 @@ namespace Game
         public void Solve()
         {
             if (phase == Phase.Listening) StartCoroutine(Break());
+        }
+
+        /// <summary>0 far from the orb, 1 as close as one can get.</summary>
+        float Closeness()
+        {
+            float distance = Vector3.Distance(player.View.transform.position, orb.transform.position);
+            return Mathf.Clamp01(Mathf.InverseLerp(feltBetween.x, feltBetween.y, distance));
+        }
+
+        /// <summary>Up close, space bends harder, the view strains and trembles, and the roar rises.</summary>
+        void FeelTheOrb()
+        {
+            float c = Closeness(), c2 = c * c;
+            aberration.intensity.value = aberrationRest + 0.35f * c2;
+            vignette.intensity.value = vignetteRest + 0.18f * c2;
+            grain.intensity.value = grainRest + 0.3f * c2;
+            player.Shake = (0.004f + 0.05f * orb.Pulse) * c2;
+            player.View.fieldOfView = fovRest + 8f * c2;
+            orb.Warp = 1f + 0.6f * c2;
+            if (nearSound) nearSound.volume = nearVolume * Mathf.Pow(c, 1.5f);
+        }
+
+        /// <summary>Close to the orb, every symbol it sends pushes the player back, like a heartbeat.</summary>
+        void OnSymbol(MorseCode.StepKind kind)
+        {
+            if (phase != Phase.Listening || (kind != MorseCode.StepKind.Dot && kind != MorseCode.StepKind.Dash)) return;
+            float c = Closeness();
+            if (c < 0.2f) return;
+            Vector3 away = (player.transform.position - orb.transform.position).normalized;
+            player.Push(away * ((kind == MorseCode.StepKind.Dash ? 1.4f : 0.8f) * c * c));
+            player.Kick(0.03f * c);
         }
 
         void OnGuess(string text)
@@ -166,10 +212,16 @@ namespace Game
             // The gathering sound ends exactly as the orb falls to a point.
             if (effects && gatherClip) StartCoroutine(PlayAfter(gatherClip, build + collapse - gatherClip.length));
 
+            float fovFrom = player.View.fieldOfView;
+            float nearFrom = nearSound ? nearSound.volume : 0f;
+
             // It understood. It gathers itself, faster and faster.
             yield return Tween(build, k =>
             {
                 float e = k * k;
+                orb.Swell = e;
+                player.View.fieldOfView = Mathf.Lerp(fovFrom, fovRest + 6f * e, Smooth(k));
+                if (nearSound) nearSound.volume = Mathf.Lerp(nearFrom, nearVolume, e);
                 player.TurnToward(orb.transform.position, 1.2f + 2f * k);
                 player.Pull(orb.transform.position, 0.5f + 3f * e);
                 player.Shake = 0.015f + 0.16f * e;
@@ -200,6 +252,7 @@ namespace Game
                 voice.Drive = 1f - e;
                 voice.Pitch = 2.2f + 1.5f * e;
                 if (drone) drone.volume = droneVolume * 1.6f * (1f - e);
+                if (nearSound) nearSound.volume = nearVolume * (1f - e);
             });
             voice.Muted = true;
             yield return new WaitForSeconds(0.35f);
