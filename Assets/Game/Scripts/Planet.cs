@@ -37,23 +37,23 @@ namespace Game
         }
 
         /// <summary>Eases one of the surface's amounts (for example "_Molten") to a value.</summary>
-        public void Ease(string property, float to, float seconds) => Start(surfaceMaterial, property, new Vector4(to, 0f, 0f, 0f), false, seconds);
+        public void Ease(string property, float to, float seconds) => Animate(surfaceMaterial, property, new Vector4(to, 0f, 0f, 0f), false, seconds);
 
         /// <summary>Eases one of the air's amounts ("_Thickness", "_Aurora").</summary>
         public void EaseAir(string property, float to, float seconds)
         {
-            if (airMaterial) Start(airMaterial, property, new Vector4(to, 0f, 0f, 0f), false, seconds);
+            if (airMaterial) Animate(airMaterial, property, new Vector4(to, 0f, 0f, 0f), false, seconds);
         }
 
         /// <summary>Eases the air's colour.</summary>
         public void EaseHaze(Color to, float seconds)
         {
-            if (airMaterial) Start(airMaterial, "_Haze", to, true, seconds);
+            if (airMaterial) Animate(airMaterial, "_Haze", to, true, seconds);
         }
 
         public float Get(string property) => surfaceMaterial.GetFloat(property);
 
-        void Start(Material material, string property, Vector4 to, bool colour, float seconds)
+        void Animate(Material material, string property, Vector4 to, bool colour, float seconds)
         {
             int id = Shader.PropertyToID(property);
             tweens.RemoveAll(t => t.material == material && t.id == id);
