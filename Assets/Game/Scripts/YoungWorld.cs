@@ -169,7 +169,7 @@ namespace Game
             Molten = remelted = true;
             Water = Ice = 0f;
             Look(1.5f);
-            earth.Ease("_Glow", 3.6f, 1.2f);
+            earth.Ease("_Glow", 2.6f, 1.2f);
 
             if (!glancing)
             {
@@ -211,7 +211,7 @@ namespace Game
             debrisRing.Stop(true, ParticleSystemStopBehavior.StopEmitting);
             moon.Ease("_Molten", 0.1f, 40f);
             moon.Ease("_Glow", 1.5f, 40f);
-            earth.Ease("_Glow", 2f, 8f);
+            earth.Ease("_Glow", 1.2f, 8f);
             HasMoon = true;
             player.Shake = 0f;
             Busy = false;
@@ -401,9 +401,10 @@ namespace Game
         /// <summary>Eases the planet's look to its state.</summary>
         void Look(float seconds)
         {
-            // Before the great impact the magma ocean shows only in cracks and low basins; after it, everywhere.
-            earth.Ease("_Molten", Molten ? (remelted ? 1f : 0.3f) : 0.04f, seconds);
-            earth.Ease("_Glow", Molten ? (remelted ? 2f : 2.6f) : 1.2f, seconds);
+            // Before the great impact the magma ocean shows only in cracks and low basins; after it, nearly
+            // everywhere, with rafts of crust floating on it (fully molten, Earth reads as a second sun).
+            earth.Ease("_Molten", Molten ? (remelted ? 0.62f : 0.3f) : 0.04f, seconds);
+            earth.Ease("_Glow", Molten ? (remelted ? 1.2f : 2.6f) : 1.2f, seconds);
             earth.Ease("_Sea", Water * 0.92f, seconds);
             earth.Ease("_Ice", Ice, seconds);
             Color haze = Molten ? new Color(1f, 0.45f, 0.22f)

@@ -306,10 +306,19 @@
 }
 
 .journal__holder {
-    flex-grow: 1;
     flex-shrink: 1;
     height: 36px;
     overflow: hidden;
+}
+
+.journal__side {
+    flex-grow: 1;
+    flex-shrink: 0;
+    height: 36px;
+    padding-left: 14px;
+    flex-direction: row;
+    justify-content: flex-end;
+    align-items: flex-end;
 }
 
 .journal__words {
@@ -329,12 +338,15 @@
     flex-direction: row;
     align-items: center;
     justify-content: flex-end;
+}
+
+.journal__sign {
     transition-property: opacity, scale;
     transition-duration: 0.25s, 0.4s;
     transition-timing-function: linear, ease-out-back;
 }
 
-.journal__mark--fresh {
+.journal__sign--fresh {
     opacity: 0;
     scale: 1.7 1.7;
 }
@@ -402,9 +414,14 @@
 }
 
 .journal__margin {
-    position: absolute;
-    right: 0;
-    bottom: 22px;
-    font-size: 15px;
-    color: rgb(170, 64, 64);
+    padding-bottom: 6px;
+    font-size: 19px;
+    color: rgb(160, 52, 52);
+    -unity-text-align: lower-right;
+    white-space: nowrap;
+}
+
+/* In the notes the words sit low on the line: strike them where the letters are. */
+.journal__holder .strike {
+    top: 63%;
 }

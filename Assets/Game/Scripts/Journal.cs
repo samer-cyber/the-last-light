@@ -23,7 +23,7 @@ namespace Game
         public class Entry
         {
             public string Text { get; internal set; }
-            internal VisualElement holder, mark;
+            internal VisualElement holder, side, mark;
         }
 
         VisualElement lines;
@@ -45,13 +45,23 @@ namespace Game
         /// <summary>Notes what the player asked, waiting for its answer.</summary>
         public Entry Note(string words)
         {
+            var entry = Row(words);
+            entry.mark.Add(Words("…", "journal__pending"));
+            return entry;
+        }
+
+        // A line of the notes: the words (sized to them, so a stroke covers only them), the margin
+        // beside them, and the mark at the end.
+        Entry Row(string words)
+        {
             var entry = new Entry { Text = words };
             var row = Element("journal__entry");
             entry.holder = Element("journal__holder");
             entry.holder.Add(Words(words, "journal__words"));
+            entry.side = Element("journal__side");
             entry.mark = Element("journal__mark");
-            entry.mark.Add(Words("…", "journal__pending"));
             row.Add(entry.holder);
+            row.Add(entry.side);
             row.Add(entry.mark);
             Add(row);
             return entry;
@@ -61,15 +71,19 @@ namespace Game
         public void Mark(Entry entry, Sign sign)
         {
             entry.mark.Clear();
+            VisualElement shown;
             if (sign == Sign.Unknowable)
             {
-                var star = Element("journal__star");
-                star.Add(Element("journal__star-tail"));
-                star.Add(Element("journal__star-head"));
-                entry.mark.Add(star);
+                shown = Element("journal__star");
+                shown.Add(Element("journal__star-tail"));
+                shown.Add(Element("journal__star-head"));
             }
-            else entry.mark.Add(Words(sign == Sign.Yes ? "1" : "0", "journal__digit"));
-            Draw(entry.mark, "journal__mark--fresh");
+            else shown = Words(sign == Sign.Yes ? "1" : "0", "journal__digit");
+            // Drawn on the new sign, not on its box: the box keeps its size, so it would never be
+            // laid out again and the sign would stay invisible.
+            shown.AddToClassList("journal__sign");
+            entry.mark.Add(shown);
+            Draw(shown, "journal__sign--fresh");
             Play(writeClip);
         }
 
@@ -77,7 +91,7 @@ namespace Game
         public void Pointed(Entry entry, string what)
         {
             entry.mark.Clear();
-            entry.holder.Add(Words("it showed " + what, "journal__margin"));
+            entry.side.Add(Words("it showed " + what, "journal__margin"));
             Play(writeClip);
         }
 
@@ -85,7 +99,7 @@ namespace Game
         public void Margin(Entry entry, string text)
         {
             if (string.IsNullOrEmpty(text)) return;
-            entry.holder.Add(Words(text, "journal__margin"));
+            entry.side.Add(Words(text, "journal__margin"));
         }
 
         /// <summary>A line that got no answer (no connection, or it took too long): ask again.</summary>
@@ -127,15 +141,7 @@ namespace Game
             {
                 if (first) Add(Words("and before that:", "journal__heading"));
                 first = false;
-                var entry = new Entry { Text = words };
-                var row = Element("journal__entry");
-                entry.holder = Element("journal__holder");
-                entry.holder.Add(Words(words, "journal__words"));
-                entry.mark = Element("journal__mark");
-                row.Add(entry.holder);
-                row.Add(entry.mark);
-                Add(row);
-                Strike(entry, what);
+                Strike(Row(words), what);
             }
         }
 
@@ -151,7 +157,7 @@ namespace Game
             var line = Element(kind);
             line.style.rotate = new Rotate(Angle.Degrees(Wobble(1.5f)));
             entry.holder.Add(line);
-            if (!string.IsNullOrEmpty(margin)) entry.holder.Add(Words(margin, "journal__margin"));
+            Margin(entry, margin);
             Draw(line, "line--fresh");
             Play(writeClip);
         }
