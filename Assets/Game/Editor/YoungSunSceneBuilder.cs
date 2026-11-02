@@ -231,8 +231,8 @@ namespace Game.Building
             Wire(player, ("view", camera), ("orb", earthObject.transform));
             SetValue(player, "nearest", 24f);
             SetValue(player, "farthest", 420f);
-            SetValue(player, "thrust", 9f);
-            SetValue(player, "maxSpeed", 18f);
+            SetValue(player, "thrust", 3.5f);
+            SetValue(player, "maxSpeed", 7f);
             SetValue(player, "damping", 0.9f);
 
             var volumeObject = new GameObject("Global Volume");

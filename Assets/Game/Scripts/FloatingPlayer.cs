@@ -120,7 +120,15 @@ namespace Game
             float distance = away.magnitude;
             if (distance < 1e-3f) return;
             Vector3 direction = away / distance;
-            if (distance < nearest) velocity += direction * ((nearest - distance) * 3f * dt);
+            if (distance < nearest)
+            {
+                // The way in closes without throwing the player back out (a spring here made them bob
+                // in and out while holding W): inward speed is taken away, and a gentle push eases
+                // them back to the edge.
+                float inward = Vector3.Dot(velocity, -direction);
+                if (inward > 0f) velocity += direction * inward;
+                velocity += direction * ((nearest - distance) * 0.8f * dt);
+            }
             else if (distance > farthest) velocity -= direction * ((distance - farthest) * 0.6f * dt);
         }
 
