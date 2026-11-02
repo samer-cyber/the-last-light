@@ -191,3 +191,54 @@
 .hud__note--shown {
     opacity: 1;
 }
+
+/* The frozen world: a dot in the middle of the view, the name of what it rests on, and what the mind holds. */
+
+.hud__aim {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    margin-top: -5px;
+    flex-direction: column;
+    align-items: center;
+}
+
+.hud__aim-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 3px;
+    background-color: rgba(235, 228, 214, 0.45);
+}
+
+.hud__aim-dot--on {
+    background-color: rgba(255, 236, 205, 0.95);
+}
+
+.hud__aim-words {
+    margin-top: 14px;
+    font-size: 19px;
+    letter-spacing: 3px;
+    color: rgba(240, 232, 218, 0.85);
+    text-shadow: 0 1px 8px rgba(0, 0, 0, 0.95);
+    -unity-text-align: middle-center;
+}
+
+.hud__aim-action {
+    margin-top: 4px;
+    font-size: 16px;
+    letter-spacing: 2px;
+    color: rgba(255, 214, 160, 0.9);
+    text-shadow: 0 1px 8px rgba(0, 0, 0, 0.95);
+    -unity-text-align: middle-center;
+}
+
+.hud__carry {
+    position: absolute;
+    left: 48px;
+    bottom: 40px;
+    font-size: 18px;
+    letter-spacing: 3px;
+    color: rgba(225, 218, 205, 0.7);
+    text-shadow: 0 1px 8px rgba(0, 0, 0, 0.95);
+}

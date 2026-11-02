@@ -22,6 +22,9 @@ namespace Game
         /// <summary>A dot or dash has finished; true for a dash.</summary>
         public event Action<bool> SymbolEnded;
 
+        /// <summary>Where the last traveller's first words for the next universe are kept (PlayerPrefs).</summary>
+        public const string FirstWordsKey = "first_words";
+
         public string Message => message;
         public bool Running { get; private set; }
         public bool Lit { get; private set; }
@@ -33,6 +36,9 @@ namespace Game
 
         void Awake()
         {
+            // The words the last player gave the mind at the end of time, if any, are this orb's message.
+            string remembered = PlayerPrefs.GetString(FirstWordsKey, "");
+            if (!string.IsNullOrWhiteSpace(remembered)) message = remembered;
             steps = MorseCode.Sequence(message, pauseUnits);
             index = steps.Count - 1;
         }

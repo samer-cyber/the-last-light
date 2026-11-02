@@ -1,0 +1,56 @@
+/* Writing to the mind: one line low on the screen, under a thin rule, and the keys that work. */
+
+.say {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 120px;
+    flex-direction: column;
+    align-items: center;
+    opacity: 0;
+    translate: 0 14px;
+    transition-property: opacity, translate;
+    transition-duration: 0.25s, 0.25s;
+}
+
+.say--open {
+    opacity: 1;
+    translate: 0 0;
+}
+
+.say__line {
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    min-width: 760px;
+    padding: 10px 26px 12px 26px;
+    border-bottom-width: 1px;
+    border-color: rgba(255, 226, 190, 0.55);
+    background-color: rgba(6, 6, 10, 0.45);
+}
+
+.say__text {
+    font-size: 28px;
+    letter-spacing: 1px;
+    color: rgba(250, 242, 228, 0.96);
+    -unity-text-align: middle-left;
+}
+
+.say__text--empty {
+    color: rgba(250, 242, 228, 0.38);
+}
+
+.say__caret {
+    width: 2px;
+    height: 30px;
+    margin-left: 3px;
+    background-color: rgba(255, 230, 196, 0.9);
+}
+
+.say__keys {
+    margin-top: 10px;
+    font-size: 15px;
+    letter-spacing: 2px;
+    color: rgba(230, 222, 208, 0.5);
+    -unity-text-align: middle-center;
+}

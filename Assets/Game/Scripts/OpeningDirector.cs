@@ -38,7 +38,7 @@ namespace Game
         [SerializeField, Tooltip("Seconds without opening the notepad before the first hint about the message.")] float hintAfter = 24f;
         [SerializeField, Tooltip("Seconds with the notepad up before the Morse key turns up.")] float keyAfter = 10f;
         [SerializeField, Tooltip("The words on the white after the flash.")] string afterwards = "13.8 billion years ago";
-        [SerializeField, Tooltip("The scene that follows.")] string nextScene = "YoungSun";
+        [SerializeField, Tooltip("The scene that follows.")] string nextScene = "LastLight";
 
         enum Phase { Arriving, Listening, Breaking, Ended }
 

@@ -13,8 +13,8 @@ namespace Game
         [SerializeField] UIDocument document;
         [SerializeField] StyleSheet style;
 
-        VisualElement layer, hint, white, subtitle, black, listen, listenLevel;
-        Label title, listenWords, said, note;
+        VisualElement layer, hint, white, subtitle, black, listen, listenLevel, aim, aimDot;
+        Label title, listenWords, said, note, aimWords, aimAction, carry;
         IVisualElementScheduledItem saidFade, noteFade;
 
         public float Black
@@ -94,6 +94,32 @@ namespace Game
             listen.RemoveFromClassList("hud__listen--shown");
         }
 
+        /// <summary>
+        /// What the centre of the view rests on: a small dot, its name under it, and what a key does
+        /// with it ("[E] gather"). Null hides the words and leaves the dot.
+        /// </summary>
+        public void Aim(string name, string action)
+        {
+            Build();
+            aim.style.display = DisplayStyle.Flex;
+            aimWords.text = name ?? "";
+            aimAction.text = action ?? "";
+            aimDot.EnableInClassList("hud__aim-dot--on", name != null);
+        }
+
+        public void HideAim()
+        {
+            Build();
+            aim.style.display = DisplayStyle.None;
+        }
+
+        /// <summary>What the mind holds, small, low on the left ("stone 4   light 3").</summary>
+        public void Carry(string text)
+        {
+            Build();
+            carry.text = text;
+        }
+
         /// <summary>The player's own words, as they were heard, for a few seconds.</summary>
         public void Said(string text, float seconds = 5f) => Flash(said, "hud__said--shown", "“" + text + "”", seconds, ref saidFade);
 
@@ -132,6 +158,19 @@ namespace Game
             note = new Label { pickingMode = PickingMode.Ignore };
             note.AddToClassList("hud__note");
             layer.Add(note);
+            aim = Element("hud__aim");
+            aim.style.display = DisplayStyle.None;
+            aimDot = Part("hud__aim-dot");
+            aim.Add(aimDot);
+            aimWords = new Label { pickingMode = PickingMode.Ignore };
+            aimWords.AddToClassList("hud__aim-words");
+            aim.Add(aimWords);
+            aimAction = new Label { pickingMode = PickingMode.Ignore };
+            aimAction.AddToClassList("hud__aim-action");
+            aim.Add(aimAction);
+            carry = new Label { pickingMode = PickingMode.Ignore };
+            carry.AddToClassList("hud__carry");
+            layer.Add(carry);
             white = Element("hud__white");
             title = new Label { pickingMode = PickingMode.Ignore };
             title.AddToClassList("hud__title");

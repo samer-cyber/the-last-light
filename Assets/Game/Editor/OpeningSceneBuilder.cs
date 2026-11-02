@@ -155,11 +155,12 @@ namespace Game.Building
             var droneV2 = FindClip("void_drone_v2");
             var drone = MakeSource("Drone", sound, droneV2 ?? FindClip("void_drone"), true);
             var near = MakeSource("Near", sound, FindClip("near_orb_loop"), true);
-            var music = MakeSource("Music", sound, FindClip("music_void"), true);
+            var music = MakeSource("Music", sound, FindClip("opening_1") ?? FindClip("music_void"), true);
             var effects = MakeSource("Effects", sound, null, false);
             var pulse = new GameObject("Pulse").AddComponent<MorsePulse>();
             pulse.transform.SetParent(sound, false);
-            Wire(pulse, ("emitter", emitter), ("dot", FindClip("pulse_dot") ?? FindClip("pulse_dot_A")), ("dash", FindClip("pulse_dash") ?? FindClip("pulse_dash_A")));
+            // Pulse H (a heartbeat through steel) since 2 Nov; G and I are on sound-board/v3.html.
+            Wire(pulse, ("emitter", emitter), ("dot", FindClip("pulse_dot_H") ?? FindClip("pulse_dot")), ("dash", FindClip("pulse_dash_H") ?? FindClip("pulse_dash")));
             var voice = MakeSource("Voice", sound, null, true).gameObject.AddComponent<MorseVoice>();
             Wire(voice, ("emitter", emitter));
             SetValue(voice, "followMessage", !pulse.HasClips);

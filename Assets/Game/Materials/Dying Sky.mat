@@ -1,0 +1,38 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!21 &2100000
+Material:
+  serializedVersion: 8
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: Dying Sky
+  m_Shader: {fileID: 4800000, guid: f804078f05009eb4395fe904ccff30c6, type: 3}
+  m_Parent: {fileID: 0}
+  m_ModifiedSerializedProperties: 0
+  m_ValidKeywords: []
+  m_InvalidKeywords: []
+  m_LightmapFlags: 4
+  m_EnableInstancingVariants: 0
+  m_DoubleSidedGI: 0
+  m_CustomRenderQueue: -1
+  stringTagMap: {}
+  disabledShaderPasses: []
+  m_LockedProperties: 
+  m_SavedProperties:
+    serializedVersion: 3
+    m_TexEnvs: []
+    m_Ints: []
+    m_Floats:
+    - _Stars: 1
+    m_Colors:
+    - _Band: {r: 0.03, g: 0.02, b: 0.018, a: 1}
+    - _BandNormal: {r: 0.3, g: 0.8, b: -0.5, a: 0}
+    - _Glow: {r: 0.54999995, g: 0.11999995, b: 0.049999982, a: 1}
+    - _GlowWide: {r: 0.13999996, g: 0.04, b: 0.03, a: 1}
+    - _Horizon: {r: 0.03, g: 0.028, b: 0.04, a: 1}
+    - _SunDirection: {r: -0.3803615, g: 0.16015221, b: 0.9108658, a: 0}
+    - _Zenith: {r: 0.004, g: 0.005, b: 0.011, a: 1}
+  m_BuildTextureStacks: []
+  m_AllowLocking: 1
