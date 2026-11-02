@@ -336,11 +336,15 @@ namespace Game
                 matter = Matters.All.Where(m => m != Matter.Light).OrderByDescending(mind.Count).First();
                 if (mind.Count(matter) == 0) matter = Matter.Stone;
             }
+            // A way across or up (a bridge, stairs, a ramp) starts where the traveller stands, or
+            // where they look; the model sometimes names the thing climbed as the start.
+            bool way = wish.Kind == "BRIDGE" || wish.Kind == "STAIRS" || wish.Kind == "RAMP";
+            string fromId = way && wish.From != "AIM" ? "HERE" : wish.From;
             var request = new Maker.Request
             {
                 Kind = wish.Kind,
                 Matter = matter,
-                From = Place(wish.From, "HERE"),
+                From = Place(fromId, "HERE"),
                 To = Place(wish.To, "AIM"),
                 Size = wish.Size == "SMALL" ? 0.6f : wish.Size == "LARGE" ? 1.6f : 1f,
                 Height = wish.Height,
