@@ -95,13 +95,13 @@ namespace Game
                 Trouble?.Invoke("hold [Q] while you speak");
                 return;
             }
-            int channels = clip.channels;
+            int channels = clip.channels, frequency = clip.frequency;
             var data = new float[samples * channels];
             clip.GetData(data, 0);
             Destroy(clip);
             if (sound && stopClip) sound.PlayOneShot(stopClip, 0.6f);
             HasSpoken = true;
-            Spoken?.Invoke(Wav(data, channels, rate));
+            Spoken?.Invoke(Wav(data, channels, frequency));
         }
 
         /// <summary>16-bit PCM WAV.</summary>

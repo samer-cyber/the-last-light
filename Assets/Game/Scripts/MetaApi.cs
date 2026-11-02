@@ -1,6 +1,5 @@
 using System;
 using System.Collections;
-using System.Collections.Generic;
 using System.Text;
 using UnityEngine;
 using UnityEngine.Networking;
@@ -58,14 +57,26 @@ namespace Game
                 done(null, "no " + KeyName);
                 yield break;
             }
+            // The form is written by hand: Meta's server answers the body UnityWebRequest.Post makes
+            // from form sections with "Malformed multipart body".
             const string settings = "{\"model\":\"muse-voice-transcribe-1.0\",\"audioEncoding\":\"WAV\",\"mode\":\"PUSH_TO_TALK\"}";
-            var form = new List<IMultipartFormSection>
+            string boundary = Guid.NewGuid().ToString("N");
+            byte[] head = Encoding.UTF8.GetBytes(
+                $"--{boundary}\r\nContent-Disposition: form-data; name=\"request\"\r\nContent-Type: application/json\r\n\r\n{settings}\r\n" +
+                $"--{boundary}\r\nContent-Disposition: form-data; name=\"audio\"; filename=\"speech.wav\"\r\nContent-Type: audio/wav\r\n\r\n");
+            byte[] tail = Encoding.UTF8.GetBytes($"\r\n--{boundary}--\r\n");
+            var body = new byte[head.Length + wav.Length + tail.Length];
+            Buffer.BlockCopy(head, 0, body, 0, head.Length);
+            Buffer.BlockCopy(wav, 0, body, head.Length, wav.Length);
+            Buffer.BlockCopy(tail, 0, body, head.Length + wav.Length, tail.Length);
+            string type = "multipart/form-data; boundary=" + boundary;
+            using var request = new UnityWebRequest(Base + "/asr/transcribe", "POST")
             {
-                new MultipartFormDataSection("request", Encoding.UTF8.GetBytes(settings), "application/json"),
-                new MultipartFormFileSection("audio", wav, "speech.wav", "audio/wav"),
+                uploadHandler = new UploadHandlerRaw(body) { contentType = type },
+                downloadHandler = new DownloadHandlerBuffer(),
+                timeout = Mathf.CeilToInt(timeout),
             };
-            using var request = UnityWebRequest.Post(Base + "/asr/transcribe", form);
-            request.timeout = Mathf.CeilToInt(timeout);
+            request.SetRequestHeader("Content-Type", type);
             request.SetRequestHeader("Authorization", "Bearer " + key);
             request.SetRequestHeader("Accept", "text/plain");
             yield return request.SendWebRequest();
