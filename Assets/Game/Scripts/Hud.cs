@@ -13,8 +13,9 @@ namespace Game
         [SerializeField] UIDocument document;
         [SerializeField] StyleSheet style;
 
-        VisualElement layer, hint, white, subtitle, black;
-        Label title;
+        VisualElement layer, hint, white, subtitle, black, listen, listenLevel;
+        Label title, listenWords, said, note;
+        IVisualElementScheduledItem saidFade, noteFade;
 
         public float Black
         {
@@ -56,11 +57,56 @@ namespace Game
             title.AddToClassList("hud__title--shown");
         }
 
+        public void HideTitle()
+        {
+            Build();
+            title.RemoveFromClassList("hud__title--shown");
+        }
+
         public void ShowSubtitle(string text)
         {
             Build();
             Fill(subtitle, text);
             subtitle.AddToClassList("hud__subtitle--shown");
+        }
+
+        /// <summary>While the player holds the key to speak: a light and how loud their voice is (0 to 1).</summary>
+        public void Listening(float level)
+        {
+            Build();
+            listenWords.text = "listening";
+            listenLevel.style.width = Length.Percent(Mathf.Clamp01(level) * 100f);
+            listen.AddToClassList("hud__listen--shown");
+        }
+
+        /// <summary>Between letting go of the key and the answer: a few words where the level was.</summary>
+        public void Waiting(string words)
+        {
+            Build();
+            listenWords.text = words;
+            listenLevel.style.width = Length.Percent(0f);
+            listen.AddToClassList("hud__listen--shown");
+        }
+
+        public void StopListening()
+        {
+            Build();
+            listen.RemoveFromClassList("hud__listen--shown");
+        }
+
+        /// <summary>The player's own words, as they were heard, for a few seconds.</summary>
+        public void Said(string text, float seconds = 5f) => Flash(said, "hud__said--shown", "“" + text + "”", seconds, ref saidFade);
+
+        /// <summary>A short line in the middle of the view, for a few seconds ("millions of years pass").</summary>
+        public void Note(string text, float seconds = 4f) => Flash(note, "hud__note--shown", text, seconds, ref noteFade);
+
+        void Flash(Label label, string shown, string text, float seconds, ref IVisualElementScheduledItem fade)
+        {
+            Build();
+            label.text = text;
+            label.AddToClassList(shown);
+            fade?.Pause();
+            fade = label.schedule.Execute(() => label.RemoveFromClassList(shown)).StartingIn((long)(seconds * 1000f));
         }
 
         void Build()
@@ -71,6 +117,21 @@ namespace Game
             layer = Element("hud");
             OsFonts.Apply(layer, OsFonts.Interface());
             hint = Element("hud__hint");
+            listen = Element("hud__listen");
+            listen.Add(Part("hud__listen-dot"));
+            var bar = Part("hud__listen-bar");
+            listenLevel = Part("hud__listen-level");
+            bar.Add(listenLevel);
+            listen.Add(bar);
+            listenWords = new Label { pickingMode = PickingMode.Ignore };
+            listenWords.AddToClassList("hud__listen-words");
+            listen.Add(listenWords);
+            said = new Label { pickingMode = PickingMode.Ignore };
+            said.AddToClassList("hud__said");
+            layer.Add(said);
+            note = new Label { pickingMode = PickingMode.Ignore };
+            note.AddToClassList("hud__note");
+            layer.Add(note);
             white = Element("hud__white");
             title = new Label { pickingMode = PickingMode.Ignore };
             title.AddToClassList("hud__title");
@@ -78,6 +139,13 @@ namespace Game
             subtitle = Element("hud__subtitle");
             black = Element("hud__black");
             root.Add(layer);
+        }
+
+        static VisualElement Part(string className)
+        {
+            var element = new VisualElement { pickingMode = PickingMode.Ignore };
+            element.AddToClassList(className);
+            return element;
         }
 
         VisualElement Element(string className)

@@ -55,9 +55,10 @@ namespace Game
             Vector3 toOrb = transform.position - view.transform.position;
             float distance = toOrb.magnitude;
             Vector3 viewport = view.WorldToViewportPoint(transform.position);
-            // Fade out as the orb goes behind the camera, rather than switching off at once.
+            // Fade out as the orb leaves the view (fully between 60 and 80 degrees off the line of
+            // sight), before its point on screen runs off to infinity at 90 degrees.
             float facing = Vector3.Dot(view.transform.forward, toOrb / Mathf.Max(distance, 1e-4f));
-            float visible = Mathf.Clamp01((facing + 0.2f) / 0.4f);
+            float visible = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.17f, 0.5f, facing));
 
             // Metres at the orb's distance to viewport heights.
             float toView = 1f / (Mathf.Max(distance, 1e-3f) * 2f * Mathf.Tan(view.fieldOfView * 0.5f * Mathf.Deg2Rad));

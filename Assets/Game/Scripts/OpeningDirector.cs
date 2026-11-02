@@ -36,8 +36,9 @@ namespace Game
         [SerializeField, Range(0f, 1f)] float musicVolume = 0.35f;
         [SerializeField, Tooltip("Distance at which the orb starts to be felt, and at which it is felt fully, in metres.")] Vector2 feltBetween = new Vector2(28f, 4f);
         [SerializeField, Tooltip("Seconds without opening the notepad before the first hint about the message.")] float hintAfter = 24f;
-        [SerializeField, Tooltip("Seconds with the notepad up before the Morse key turns up.")] float keyAfter = 40f;
+        [SerializeField, Tooltip("Seconds with the notepad up before the Morse key turns up.")] float keyAfter = 10f;
         [SerializeField, Tooltip("The words on the white after the flash.")] string afterwards = "13.8 billion years ago";
+        [SerializeField, Tooltip("The scene that follows.")] string nextScene = "YoungSun";
 
         enum Phase { Arriving, Listening, Breaking, Ended }
 
@@ -285,6 +286,14 @@ namespace Game
             yield return new WaitForSeconds(2.5f);
             hud.ShowTitle(afterwards.ToUpperInvariant());
             yield return new WaitForSeconds(5f);
+            // On to the young solar system, which opens on white as this ends.
+            if (Application.CanStreamedLevelBeLoaded(nextScene))
+            {
+                hud.HideTitle();
+                yield return new WaitForSeconds(2f);
+                SceneManager.LoadScene(nextScene);
+                yield break;
+            }
             hud.ShowSubtitle("the prologue ends here   [R] begin again");
             phase = Phase.Ended;
         }

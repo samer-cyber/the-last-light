@@ -109,3 +109,85 @@
     border-color: rgba(60, 60, 72, 0.4);
     color: rgba(60, 60, 72, 0.9);
 }
+
+/* Speaking to the entity: a light, the voice's level and a word, above the hints. */
+
+.hud__listen {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 150px;
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+    opacity: 0;
+    transition-property: opacity;
+    transition-duration: 0.2s;
+}
+
+.hud__listen--shown {
+    opacity: 1;
+}
+
+.hud__listen-dot {
+    width: 14px;
+    height: 14px;
+    margin-right: 16px;
+    border-radius: 7px;
+    background-color: rgb(255, 118, 104);
+}
+
+.hud__listen-bar {
+    width: 220px;
+    height: 4px;
+    border-radius: 2px;
+    background-color: rgba(220, 228, 255, 0.2);
+}
+
+.hud__listen-level {
+    width: 0%;
+    height: 4px;
+    border-radius: 2px;
+    background-color: rgba(232, 238, 255, 0.92);
+}
+
+.hud__listen-words {
+    margin-left: 16px;
+    font-size: 21px;
+    letter-spacing: 2px;
+    color: rgba(222, 228, 255, 0.85);
+    text-shadow: 0 1px 10px rgba(0, 0, 0, 0.9);
+}
+
+/* The player's own words, as heard; and short lines in the middle of the view. */
+
+.hud__said,
+.hud__note {
+    position: absolute;
+    left: 12%;
+    right: 12%;
+    white-space: normal;
+    -unity-text-align: middle-center;
+    text-shadow: 0 1px 12px rgba(0, 0, 0, 0.9);
+    opacity: 0;
+    transition-property: opacity;
+    transition-duration: 0.6s;
+}
+
+.hud__said {
+    bottom: 196px;
+    font-size: 30px;
+    color: rgba(242, 244, 255, 0.95);
+}
+
+.hud__note {
+    top: 30%;
+    font-size: 28px;
+    letter-spacing: 6px;
+    color: rgba(236, 238, 255, 0.9);
+}
+
+.hud__said--shown,
+.hud__note--shown {
+    opacity: 1;
+}

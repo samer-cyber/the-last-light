@@ -1,15 +1,51 @@
-/* The notebook's page, drawn into a 640 by 902 panel (an A6 page) shown on the 3D notebook.
-   Every row of writing is 36px tall, the spacing of the ruled lines drawn in Notepad.cs. */
+/* The notepad. On screen: a sheet of ruled paper that comes up from the bottom right.
+   Held (.notepad--held): the page fills a 640 by 902 panel drawn into the 3D notebook's texture.
+   Every row of writing is 36px tall, the spacing of the ruled lines drawn in the page's script. */
 
 .notepad {
     position: absolute;
+    right: 64px;
+    bottom: 36px;
+    width: 660px;
+    height: 720px;
+    opacity: 0;
+    translate: 0 112%;
+    rotate: 3deg;
+    transition-property: translate, rotate, opacity;
+    transition-duration: 0.5s, 0.6s, 0.25s;
+    transition-timing-function: ease-out-cubic, ease-out-cubic, linear;
+}
+
+.notepad--open {
+    opacity: 1;
+    translate: 0 0;
+    rotate: -1.5deg;
+}
+
+.notepad--held {
     left: 0;
     top: 0;
     right: 0;
     bottom: 0;
+    width: auto;
+    height: auto;
+    opacity: 1;
+    translate: 0 0;
+    rotate: 0deg;
+    transition-duration: 0s;
 }
 
 .notepad__shadow {
+    position: absolute;
+    left: 14px;
+    top: 20px;
+    right: -14px;
+    bottom: -18px;
+    border-radius: 8px;
+    background-color: rgba(0, 0, 0, 0.5);
+}
+
+.notepad--held .notepad__shadow {
     display: none;
 }
 
@@ -20,10 +56,14 @@
     right: 0;
     bottom: 0;
     padding: 36px 36px 0 80px;
-    border-radius: 0;
+    border-radius: 3px;
     background-color: rgb(244, 239, 226);
     background-size: 100% 100%;
     overflow: hidden;
+}
+
+.notepad--held .notepad__page {
+    border-radius: 0;
 }
 
 .notepad__date {
@@ -174,17 +214,18 @@
     color: rgb(150, 150, 160);
 }
 
-/* The Morse key: a sticky note that turns up stuck on the lower part of the page. */
+/* The Morse key: a sticky note stuck to the top of the sheet, clear of the orb; on the held
+   notebook it sits on the lower part of the page. */
 
 .sticky {
     position: absolute;
-    right: 24px;
-    bottom: 66px;
+    left: 36px;
+    top: -318px;
     width: 272px;
     padding: 14px 20px 16px 22px;
     border-radius: 2px;
     background-color: rgb(247, 224, 116);
-    rotate: 3deg;
+    rotate: -3deg;
     opacity: 0;
     scale: 1.25 1.25;
     transition-property: opacity, scale;
@@ -195,6 +236,14 @@
 .sticky--shown {
     opacity: 1;
     scale: 1 1;
+}
+
+.notepad--held .sticky {
+    left: auto;
+    top: auto;
+    right: 24px;
+    bottom: 66px;
+    rotate: 3deg;
 }
 
 .sticky__title {
@@ -236,4 +285,126 @@
     margin-right: 4px;
     border-radius: 2px;
     background-color: rgb(30, 40, 72);
+}
+
+/* The young solar system's notes (Journal.cs): each question with the sky's answer beside it. */
+
+.journal__lines {
+    flex-direction: column;
+}
+
+.journal__entry {
+    height: 36px;
+    flex-direction: row;
+    align-items: flex-end;
+    transition-property: opacity;
+    transition-duration: 0.35s;
+}
+
+.journal__entry--fresh {
+    opacity: 0;
+}
+
+.journal__holder {
+    flex-grow: 1;
+    flex-shrink: 1;
+    height: 36px;
+    overflow: hidden;
+}
+
+.journal__words {
+    height: 36px;
+    padding: 0 4px 4px 2px;
+    font-size: 24px;
+    color: rgb(30, 40, 72);
+    -unity-text-align: lower-left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.journal__mark {
+    width: 54px;
+    height: 36px;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-end;
+    transition-property: opacity, scale;
+    transition-duration: 0.25s, 0.4s;
+    transition-timing-function: linear, ease-out-back;
+}
+
+.journal__mark--fresh {
+    opacity: 0;
+    scale: 1.7 1.7;
+}
+
+.journal__digit {
+    padding-bottom: 2px;
+    font-size: 34px;
+    color: rgb(30, 40, 72);
+}
+
+.journal__pending {
+    font-size: 24px;
+    color: rgba(30, 40, 72, 0.35);
+}
+
+.journal__star {
+    width: 40px;
+    height: 30px;
+}
+
+.journal__star-tail {
+    position: absolute;
+    left: 4px;
+    top: 17px;
+    width: 24px;
+    height: 3px;
+    border-radius: 2px;
+    background-color: rgba(30, 40, 72, 0.65);
+    rotate: -22deg;
+}
+
+.journal__star-head {
+    position: absolute;
+    left: 25px;
+    top: 9px;
+    width: 9px;
+    height: 9px;
+    border-radius: 5px;
+    background-color: rgb(30, 40, 72);
+}
+
+.journal__thought {
+    height: 36px;
+    padding-bottom: 5px;
+    font-size: 21px;
+    color: rgb(80, 96, 150);
+    -unity-text-align: lower-left;
+}
+
+.journal__heading {
+    height: 36px;
+    padding-bottom: 5px;
+    font-size: 22px;
+    color: rgb(92, 92, 104);
+    -unity-text-align: lower-left;
+}
+
+.journal__need {
+    width: 120px;
+    height: 36px;
+    padding-bottom: 5px;
+    font-size: 20px;
+    color: rgb(150, 70, 70);
+    -unity-text-align: lower-left;
+}
+
+.journal__margin {
+    position: absolute;
+    right: 0;
+    bottom: 22px;
+    font-size: 15px;
+    color: rgb(170, 64, 64);
 }

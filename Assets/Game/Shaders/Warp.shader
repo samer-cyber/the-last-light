@@ -48,7 +48,9 @@ Shader "Game/Warp"
                     ripple += at > 0.0 ? _WarpRippleAmp[i] * x * exp(-x * x) : 0.0;
                 }
 
-                float rs = clamp(r - bend + ripple * protect, -0.75, 4.0);
+                // Only the turned-over side is limited: far from the orb the image must stay where it is,
+                // even when the orb's centre lies many screens away (seen from the side).
+                float rs = max(r - bend + ripple * protect, -0.75);
                 // Never take colour from inside the core: its own light does not bend around it.
                 float clear = core * 1.35;
                 float passes = abs(rs) / max(clear, 1e-5);
