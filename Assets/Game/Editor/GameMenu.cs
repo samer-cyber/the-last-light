@@ -8,9 +8,10 @@ using UnityEngine;
 namespace Game.Building
 {
     /// <summary>
-    /// Game > Play from the Opening and Game > Play the Last Light start play mode in that scene
-    /// with the Game view maximized. Game > Build for Windows makes a full-screen testing build
-    /// (debug keys on) in the hackathon folder's build/, next to secrets.env, outside the repository.
+    /// Game > Play the Last Light starts play mode in the game with the Game view maximized; the old
+    /// scenes (the Morse opening, the young solar system) can still be played from the menu. Game >
+    /// Build for Windows makes a full-screen testing build (debug keys on) of the Last Light alone in
+    /// the hackathon folder's build/, next to secrets.env, outside the repository.
     /// </summary>
     public static class GameMenu
     {
@@ -20,11 +21,11 @@ namespace Game.Building
 
         static string pending;
 
-        [MenuItem("Game/Play from the Opening", priority = 0)]
-        static void PlayOpening() => Play(Opening);
-
-        [MenuItem("Game/Play the Last Light", priority = 1)]
+        [MenuItem("Game/Play the Last Light", priority = 0)]
         static void PlayLastLight() => Play(LastLight);
+
+        [MenuItem("Game/Play the Morse Opening (old)", priority = 1)]
+        static void PlayOpening() => Play(Opening);
 
         [MenuItem("Game/Play the Young Solar System (old)", priority = 2)]
         static void PlayYoungSun() => Play(YoungSun);
@@ -75,7 +76,7 @@ namespace Game.Building
             string folder = Path.GetFullPath(Path.Combine(Application.dataPath, "..", "..", "build"));
             var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
             {
-                scenes = new[] { Opening, LastLight },
+                scenes = new[] { LastLight },
                 locationPathName = Path.Combine(folder, "Game.exe"),
                 target = BuildTarget.StandaloneWindows64,
                 options = BuildOptions.Development,

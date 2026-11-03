@@ -13,10 +13,12 @@ using Object = UnityEngine.Object;
 namespace Game.Building
 {
     /// <summary>
-    /// Builds the end of time from nothing: the frozen ground with its chasm and its mountains, the
-    /// dying sun and the black hole, the traveller (a jointed figure in a cloak), the camera at their
-    /// shoulder, the mind, the loose stone, ice and metal, the ruins, the first ember, the maker, the
-    /// reader, the voice and the director, all wired together. Running it again replaces the scene.
+    /// Builds the Last Light from nothing: the frozen valley with its chasm, cliff, lake and mountains,
+    /// the dimmed red sun and the dark thing in the sky, the vault where the last people sleep, the
+    /// survivor (a jointed figure in a cloak), the camera at their shoulder, the drone with its eye,
+    /// the old station with the last heart frozen in ice and the maker's writing on its wall, the sun
+    /// mirror on the clifftop, the maker, the mind, the voice and the director, all wired together.
+    /// Running it again replaces the scene.
     /// </summary>
     public static class LastLightSceneBuilder
     {
@@ -24,7 +26,7 @@ namespace Game.Building
         static readonly Vector3 SunDirection = new Vector3(-0.38f, 0.16f, 0.91f).normalized;
         static readonly Vector3 HoleDirection = new Vector3(0.55f, 0.52f, 0.65f).normalized;
         const float ChasmNear = 0f, ChasmFar = 12f;
-        static readonly Vector3 Start = new Vector3(0f, 0f, -14f);
+        static readonly Vector3 Start = new Vector3(0f, 0f, -17f);
 
         [MenuItem("Game/Build Last Light Scene")]
         public static void Build()
@@ -38,12 +40,13 @@ namespace Game.Building
             var billboard = MakeBillboard();
             var ground = MakeGround();
             var disc = MakeRing("Accretion Ring", 128, 0.32f, 1f);
+            var irisRing = MakeRing("Iris Ring", 48, 0.58f, 1f);
             var rocks = Enumerable.Range(0, 4).Select(i => MakeRock($"Rock {i}", 11 + i * 7, 0.28f)).ToArray();
-            var shard = MakeRock("Shard", 3, 0.45f);
             var monolith = MakeRock("Monolith", 21, 0.12f);
             var cube = Resources.GetBuiltinResource<Mesh>("Cube.fbx");
             var cylinder = Resources.GetBuiltinResource<Mesh>("Cylinder.fbx");
             var ball = Resources.GetBuiltinResource<Mesh>("Sphere.fbx");
+            var quad = Resources.GetBuiltinResource<Mesh>("Quad.fbx");
 
             // ---- Materials ----
             var sky = MakeMaterial("Dying Sky", "Game/DyingSky", m => m.SetVector("_SunDirection", SunDirection));
@@ -51,20 +54,19 @@ namespace Game.Building
             var stone = MakeMatter("Matter Stone", new Color(0.5f, 0.48f, 0.47f), new Color(0.33f, 0.32f, 0.33f), 0.18f, 0f, new Color(0.55f, 0.54f, 0.52f), Color.black, Color.black);
             var ice = MakeMatter("Matter Ice", new Color(0.42f, 0.6f, 0.72f), new Color(0.28f, 0.44f, 0.58f), 0.9f, 0f, new Color(0.75f, 0.88f, 0.95f), new Color(0.12f, 0.3f, 0.45f), Color.black);
             var metal = MakeMatter("Matter Metal", new Color(0.3f, 0.29f, 0.3f), new Color(0.16f, 0.15f, 0.17f), 0.62f, 0.85f, new Color(0.62f, 0.58f, 0.52f), Color.black, Color.black);
+            var glass = MakeMatter("Matter Glass", new Color(0.55f, 0.7f, 0.74f), new Color(0.45f, 0.6f, 0.66f), 0.97f, 0.15f, new Color(0.9f, 0.97f, 1f), new Color(0.35f, 0.55f, 0.65f), Color.black);
+            var wood = MakeMatter("Matter Wood", new Color(0.36f, 0.24f, 0.15f), new Color(0.22f, 0.14f, 0.08f), 0.28f, 0f, new Color(0.46f, 0.33f, 0.21f), Color.black, Color.black);
             var light = MakeMatter("Matter Light", new Color(1f, 0.9f, 0.75f), new Color(1f, 0.8f, 0.6f), 0.5f, 0f, new Color(1f, 0.95f, 0.85f), new Color(1.2f, 0.8f, 0.5f), new Color(2.4f, 1.7f, 1.1f));
-            var matters = new[] { stone, ice, metal, light };
+            // In the order the model names them (Mind.Looks): stone, metal, ice, glass, wood, light.
+            var looks = new[] { stone, metal, ice, glass, wood, light };
+            var oldIce = MakeMatter("Old Ice", new Color(0.56f, 0.76f, 0.88f), new Color(0.4f, 0.6f, 0.76f), 0.95f, 0f, new Color(0.85f, 0.95f, 1f), new Color(0.3f, 0.6f, 0.85f), new Color(0.04f, 0.09f, 0.14f));
+            var concrete = MakeMatter("Vault Concrete", new Color(0.3f, 0.3f, 0.31f), new Color(0.22f, 0.22f, 0.24f), 0.12f, 0f, new Color(0.42f, 0.42f, 0.42f), Color.black, Color.black);
             var ghost = MakeMaterial("Plan Ghost", "Game/Ghost", m =>
             {
                 m.SetColor("_Color", new Color(1.3f, 0.95f, 0.65f));
                 m.SetFloat("_Intensity", 0.42f);
                 m.SetFloat("_Edge", 1.1f);
                 m.SetFloat("_Rim", 0.45f);
-            });
-            var ideaGhost = MakeMaterial("Idea Ghost", "Game/Ghost", m =>
-            {
-                m.SetColor("_Color", new Color(0.6f, 0.8f, 1.3f));
-                m.SetFloat("_Intensity", 0.36f);
-                m.SetFloat("_Lines", 0.6f);
             });
             var sunMaterial = MakeMaterial("Dying Sun", "Game/Sun", m =>
             {
@@ -81,50 +83,47 @@ namespace Game.Building
             });
             var black = MakeMaterial("Black Hole", "Universal Render Pipeline/Unlit", m => m.SetColor("_BaseColor", Color.black));
             var accretion = MakeMaterial("Accretion Disc", "Game/Accretion", m => m.SetFloat("_Intensity", 1.1f));
-            var mindCore = MakeMaterial("Mind Core", "Game/OrbCore", m =>
+            var droneGlow = MakeMaterial("Drone Glow", "Game/Halo", m =>
             {
-                m.SetColor("_Deep", new Color(0.1f, 0.04f, 0.02f));
-                m.SetColor("_Mid", new Color(0.9f, 0.45f, 0.18f));
-                m.SetColor("_Hot", new Color(1f, 0.85f, 0.6f));
-                m.SetColor("_Core", new Color(1f, 0.97f, 0.9f));
-                m.SetFloat("_Intensity", 2.4f);
-            });
-            var mindCorona = MakeMaterial("Mind Corona", "Game/Corona", m =>
-            {
-                m.SetColor("_Inner", new Color(1f, 0.92f, 0.78f));
-                m.SetColor("_Outer", new Color(1f, 0.55f, 0.25f));
-                m.SetFloat("_Edge", 0.1f);
-                m.SetFloat("_Intensity", 1.3f);
-            });
-            var mindGlow = MakeMaterial("Mind Glow", "Game/Halo", m =>
-            {
-                m.SetColor("_Color", new Color(1f, 0.72f, 0.45f));
+                m.SetColor("_Color", new Color(1f, 0.62f, 0.3f));
                 m.SetFloat("_Edge", 0.12f);
-                m.SetFloat("_Intensity", 0.7f);
+                m.SetFloat("_Intensity", 0.5f);
             });
-            var emberCore = MakeMaterial("Ember Core", "Game/OrbCore", m =>
+            var iris = MakeMaterial("Drone Iris", "Universal Render Pipeline/Unlit", m =>
             {
-                m.SetColor("_Deep", new Color(0.2f, 0.03f, 0.01f));
-                m.SetColor("_Mid", new Color(1f, 0.35f, 0.08f));
-                m.SetColor("_Hot", new Color(1f, 0.75f, 0.35f));
-                m.SetColor("_Core", new Color(1f, 0.95f, 0.8f));
-                m.SetFloat("_Intensity", 3f);
+                m.SetColor("_BaseColor", new Color(2.2f, 1.36f, 0.55f));
+                m.SetFloat("_Cull", 0f);
             });
-            var emberGlow = MakeMaterial("Ember Glow", "Game/Halo", m =>
-            {
-                m.SetColor("_Color", new Color(1f, 0.5f, 0.18f));
-                m.SetFloat("_Edge", 0.1f);
-                m.SetFloat("_Intensity", 1.1f);
-            });
+            var pupil = MakeMaterial("Drone Pupil", "Universal Render Pipeline/Unlit", m => m.SetColor("_BaseColor", new Color(0.01f, 0.01f, 0.012f)));
             var snowMaterial = MakeParticleMaterial("Falling Snow", softDot, 0.35f);
-            var markMaterial = MakeParticleMaterial("Mind Mark", softLine, 3.5f);
+            var flame = MakeParticleMaterial("Flame", softDot, 1.8f);
+            var beamLine = MakeParticleMaterial("Drone Beam", softLine, 2.4f);
+            var steamMaterial = MakeParticleMaterial("Steam", softDot, 0.5f);
+            var shaft = MakeMaterial("Mirror Beam", "Game/Beam", m =>
+            {
+                m.SetColor("_Color", new Color(1f, 0.72f, 0.42f));
+                m.SetFloat("_Intensity", 0f);
+                m.SetFloat("_Softness", 2.2f);
+            });
+            var writing = MakeMaterial("Maker Message", "Universal Render Pipeline/Unlit", m =>
+            {
+                m.SetTexture("_BaseMap", Load<Texture2D>($"{Root}/Textures/Maker Message.png"));
+                m.SetColor("_BaseColor", new Color(0.92f, 0.88f, 0.82f));
+                m.SetFloat("_AlphaClip", 1f);
+                m.SetFloat("_Cutoff", 0.35f);
+                m.EnableKeyword("_ALPHATEST_ON");
+                m.SetFloat("_Cull", 0f);
+            });
+            var warmWindow = MakeMaterial("Vault Window", "Universal Render Pipeline/Unlit", m => m.SetColor("_BaseColor", new Color(1.6f, 0.75f, 0.32f)));
             var porcelain = MakeLit("Traveller Porcelain", new Color(0.78f, 0.76f, 0.72f), 0.62f, 0f);
             var joint = MakeLit("Traveller Joint", new Color(0.09f, 0.09f, 0.1f), 0.55f, 0.75f);
             var cloth = MakeLit("Traveller Cloak", new Color(0.05f, 0.055f, 0.065f), 0.18f, 0f);
             cloth.SetFloat("_Cull", 0f);
             cloth.doubleSidedGI = true;
             var pack = MakeLit("Traveller Pack", new Color(0.13f, 0.12f, 0.11f), 0.35f, 0.3f);
+            var visor = MakeLit("Drone Visor", new Color(0.015f, 0.015f, 0.02f), 0.95f, 0.3f);
             var slippery = MakePhysics("Slippery", 0.04f);
+            var bouncy = MakePhysics("Bouncy", 0.6f, 0.85f);
 
             var profile = MakeProfile();
             var panel = MakePanel();
@@ -141,8 +140,10 @@ namespace Game.Building
             RenderSettings.fogColor = new Color(0.032f, 0.032f, 0.045f);
             RenderSettings.fogDensity = 0.011f;
             int travellerLayer = EnsureLayer("Traveller");
+            int droneLayer = EnsureLayer("Drone");
+            int notPicked = ~(1 << travellerLayer) & ~(1 << droneLayer) & ~(1 << 2);
 
-            // The dying sun: huge, dim and red on the horizon; its light is the scene's main light.
+            // The dimmed sun: huge and red on the horizon, its light taken; the scene's main light.
             var sunObject = new GameObject("Dying Sun");
             sunObject.transform.position = SunDirection * 3200f;
             MakePart("Body", sunObject.transform, sphere, sunMaterial, 1100f);
@@ -156,7 +157,7 @@ namespace Game.Building
             sunlight.shadowStrength = 0.85f;
             RenderSettings.sun = sunlight;
 
-            // The black hole, high in the sky, bending the stars around it.
+            // The dark thing in the sky that bends the stars: what the great minds made of the Moon.
             var holeObject = new GameObject("Black Hole");
             holeObject.transform.position = HoleDirection * 3000f;
             holeObject.transform.rotation = Quaternion.LookRotation(HoleDirection) * Quaternion.Euler(76f, 0f, 18f);
@@ -173,7 +174,7 @@ namespace Game.Building
             groundObject.AddComponent<MeshCollider>().sharedMesh = ground;
             float startY = Height(Start.x, Start.z);
 
-            // ---- The traveller ----
+            // ---- The survivor ----
             var travellerObject = new GameObject("Traveller") { layer = travellerLayer };
             travellerObject.transform.position = new Vector3(Start.x, startY + 0.05f, Start.z);
             var controller = travellerObject.AddComponent<CharacterController>();
@@ -184,6 +185,10 @@ namespace Game.Building
             controller.stepOffset = 0.42f;
             controller.skinWidth = 0.03f;
             var figure = MakeFigure(travellerObject.transform, travellerLayer, porcelain, joint, cloth, pack);
+            // Where things ride: in front, between both hands; and in the right fist, pointing on from the forearm.
+            var hands = Joint("Hands", figure.Body, new Vector3(0f, 1.02f, 0.46f), travellerLayer);
+            var hand = Joint("Hand", figure.Right.forearm, new Vector3(0f, -0.33f, 0.03f), travellerLayer);
+            hand.localRotation = Quaternion.Euler(90f, 0f, 0f);
 
             // ---- The camera ----
             var cameraObject = new GameObject("Main Camera") { tag = "MainCamera" };
@@ -205,7 +210,7 @@ namespace Game.Building
             cameraObject.AddComponent<AudioListener>();
             var follow = cameraObject.AddComponent<FollowCamera>();
             Wire(follow, ("view", camera), ("target", travellerObject.transform));
-            SetMask(follow, "solid", ~(1 << travellerLayer) & ~(1 << 2));
+            SetMask(follow, "solid", notPicked);
             var warp = holeObject.AddComponent<SpaceWarp>();
             Wire(warp, ("view", camera));
             SetValue(warp, "ring", 3.2f);
@@ -230,42 +235,10 @@ namespace Game.Building
             var makerSound = MakeSource("Making", sound, null, false);
             var talkSound = MakeSource("Talk", sound, null, false);
             var typeSound = MakeSource("Typing", sound, null, false);
+            var handsSound = MakeSource("Hands", travellerObject.transform, null, false);
 
-            // ---- The mind ----
-            var mindObject = new GameObject("Mind");
-            mindObject.transform.position = travellerObject.transform.position + new Vector3(0.85f, 2.05f, -0.45f);
-            var core = MakePart("Core", mindObject.transform, sphere, mindCore, 0.16f);
-            var corona = MakePart("Corona", mindObject.transform, billboard, mindCorona, 1.6f);
-            var glow = MakePart("Glow", mindObject.transform, billboard, mindGlow, 1.4f);
-            var shine = new GameObject("Shine").AddComponent<Light>();
-            shine.transform.SetParent(mindObject.transform, false);
-            shine.type = LightType.Point;
-            shine.color = new Color(1f, 0.82f, 0.62f);
-            shine.range = 9f;
-            shine.intensity = 2.6f;
-            shine.shadows = LightShadows.Soft;
-            shine.shadowStrength = 0.7f;
-            var markLine = new GameObject("Mark").AddComponent<LineRenderer>();
-            markLine.transform.SetParent(mindObject.transform, false);
-            markLine.useWorldSpace = false;
-            markLine.sharedMaterial = markMaterial;
-            markLine.widthMultiplier = 0.06f;
-            markLine.widthCurve = new AnimationCurve(new Keyframe(0f, 1f), new Keyframe(1f, 0.55f));
-            markLine.numCapVertices = 4;
-            markLine.numCornerVertices = 2;
-            markLine.alignment = LineAlignment.View;
-            markLine.shadowCastingMode = ShadowCastingMode.Off;
-            var hum = MakeSource("Hum", mindObject.transform, FindClip("companion_hum_loop"), true);
-            hum.spatialBlend = 0.6f;
-            hum.playOnAwake = true;
-            hum.volume = 0.3f;
-            var voice = MakeSource("Voice", mindObject.transform, null, false);
-            var mind = mindObject.AddComponent<Companion>();
-            Wire(mind, ("traveller", travellerObject.transform), ("travellerBody", figure.Body), ("core", core), ("corona", corona), ("glow", glow),
-                ("shine", shine), ("mark", markLine), ("hum", hum), ("voice", voice), ("pieceMesh", shard),
-                ("yesClip", FindClip("companion_yes")), ("noClip", FindClip("companion_no")), ("cannotClip", FindClip("companion_cannot")),
-                ("takeClip", FindClip("foley_pickup_stone_1")), ("emberClip", FindClip("companion_ember")), ("thinkClip", FindClip("companion_think_loop")));
-            WireArray(mind, "pieceMaterials", matters);
+            // ---- The drone ----
+            var drone = MakeDrone(travellerObject.transform, figure.Body, follow, droneLayer, sphere, irisRing, cube, billboard, porcelain, visor, joint, iris, pupil, droneGlow, beamLine, camera);
 
             // ---- The interface ----
             var hudStyle = Load<StyleSheet>($"{Root}/UI/Hud.uss");
@@ -276,13 +249,16 @@ namespace Game.Building
             var hud = interfaceObject.AddComponent<Hud>();
             Wire(hud, ("document", document), ("style", hudStyle));
 
-            // ---- The traveller's parts, now that everything they talk to exists ----
+            // ---- The survivor's parts, now that everything they talk to exists ----
             var traveller = travellerObject.AddComponent<Traveller>();
-            Wire(traveller, ("follow", follow), ("mind", mind), ("hud", hud), ("body", figure.Body));
-            SetMask(traveller, "seen", ~(1 << travellerLayer) & ~(1 << 2));
+            Wire(traveller, ("follow", follow), ("drone", drone), ("hud", hud), ("body", figure.Body), ("hands", hands), ("hand", hand), ("sound", handsSound),
+                ("pickClip", FindClip("pick_up") ?? FindClip("foley_pickup_stone_1")), ("dropClip", FindClip("put_down")),
+                ("strikeClip", FindClip("pick_strike")), ("torchClip", FindClip("torch_loop")));
+            SetMask(traveller, "seen", notPicked);
+            Wire(drone, ("traveller", traveller));
             var body = figure.Body.gameObject.AddComponent<TravellerBody>();
             Wire(body, ("traveller", traveller), ("hips", figure.Hips), ("spine", figure.Spine), ("chest", figure.Chest), ("neck", figure.Neck),
-                ("head", figure.Head), ("cloak", figure.Cloak), ("lookAt", mindObject.transform));
+                ("head", figure.Head), ("cloak", figure.Cloak), ("lookAt", drone.transform));
             SetSide(body, "left", figure.Left);
             SetSide(body, "right", figure.Right);
 
@@ -295,9 +271,11 @@ namespace Game.Building
             // ---- The world's things ----
             var landmarks = new List<Landmark>();
             var world = new GameObject("World").transform;
+            var (vaultLight, vaultDoor) = MakeVault(world, cube, cylinder, concrete, metal, warmWindow, groundMaterial, landmarks);
+
             // The chasm and the far side.
             landmarks.Add(MakeLandmark("Chasm", world, new Vector3(0f, (startY - 1.5f - 46f) * 0.5f, (ChasmNear + ChasmFar) * 0.5f), "CHASM", "the chasm",
-                $"{ChasmFar - ChasmNear:F0} m wide and very deep; nothing crosses it", new Vector3(60f, startY - 1.5f + 46f, ChasmFar - ChasmNear - 0.6f)));
+                $"{ChasmFar - ChasmNear:F0} m wide and 40 m deep; nothing crosses it", new Vector3(60f, startY - 1.5f + 46f, ChasmFar - ChasmNear - 0.6f)));
             float farY = Height(0f, ChasmFar + 4f);
             var farSide = MakeLandmark("Far Side", world, new Vector3(0f, farY, ChasmFar + 4f), "FAR_SIDE", "the far side", "the ground across the chasm", Vector3.zero);
             var farRegion = farSide.gameObject.AddComponent<BoxCollider>();
@@ -306,49 +284,38 @@ namespace Game.Building
             farRegion.size = new Vector3(70f, 6f, 38f);
             landmarks.Add(farSide);
 
-            // The first ember, on a plinth across the chasm.
-            var plinthPosition = new Vector3(2.5f, Height(2.5f, ChasmFar + 9f), ChasmFar + 9f);
-            var plinth = MakePart("Plinth", world, cube, stone, 1f);
-            plinth.transform.position = plinthPosition + Vector3.up * 0.55f;
-            plinth.transform.localScale = new Vector3(1.1f, 1.3f, 1.1f);
-            plinth.shadowCastingMode = ShadowCastingMode.On;
-            plinth.receiveShadows = true;
-            plinth.gameObject.AddComponent<BoxCollider>();
-            var ember = MakeEmber("First Ember", world, plinthPosition + Vector3.up * 2.1f, sphere, billboard, emberCore, emberGlow);
-            landmarks.Add(MakeLandmark("Ember Place", ember.transform, ember.transform.position, "EMBER_1", "an ember of light", "one of the last three; it hangs above a stone plinth across the chasm", Vector3.one * 1.2f));
+            // The old station: the plate and the door, the heart in its ice, the writing on the wall.
+            var station = MakeStation(world, new Vector3(17f, 0f, 37f), cube, cylinder, quad, sphere, metal, stone, light, oldIce, writing, steamMaterial, landmarks, travellerObject.transform);
+            // A loose block of the station's stone, heavy enough for the plate, for anyone who can lift it.
+            var oldBlock = MakePart("Old Block", world, cube, stone, 0.85f);
+            float blockY = Height(8f, 30f);
+            oldBlock.transform.position = new Vector3(8f, blockY + 0.43f, 30f);
+            oldBlock.transform.rotation = Quaternion.Euler(0f, 23f, 0f);
+            oldBlock.shadowCastingMode = ShadowCastingMode.On;
+            oldBlock.gameObject.AddComponent<BoxCollider>();
+            var oldBody = oldBlock.gameObject.AddComponent<Rigidbody>();
+            oldBody.mass = 1600f;
+            oldBody.interpolation = RigidbodyInterpolation.Interpolate;
+            var oldMark = MakeLandmark("Old Block Place", oldBlock.transform, oldBlock.transform.position, "OLD_BLOCK", "an old stone block", "a loose block of the station's stone, about 1600 kg; too heavy for the survivor to move", Vector3.one * 1.1f);
+            landmarks.Add(oldMark);
 
-            // The second ember, sealed in a square ruin whose door opens only under weight.
-            var (gate, ruinEmber) = MakeRuin(world, new Vector3(17f, 0f, 37f), cube, metal, stone, light, sphere, billboard, emberCore, emberGlow, landmarks, travellerObject.transform);
-
-            // The third ember, on the shelf above the cliff; ice lies at the cliff's foot.
-            float topY = Height(-8f, 64f);
-            var cliffPlinth = MakePart("Cliff Plinth", world, cube, stone, 1f);
-            cliffPlinth.transform.position = new Vector3(-8f, topY + 0.45f, 64f);
-            cliffPlinth.transform.localScale = new Vector3(1f, 1.1f, 1f);
-            cliffPlinth.shadowCastingMode = ShadowCastingMode.On;
-            cliffPlinth.receiveShadows = true;
-            cliffPlinth.gameObject.AddComponent<BoxCollider>();
-            var cliffEmber = MakeEmber("Cliff Ember", world, new Vector3(-8f, topY + 1.9f, 64f), sphere, billboard, emberCore, emberGlow);
-            landmarks.Add(MakeLandmark("Ember Place", cliffEmber.transform, cliffEmber.transform.position, "EMBER_3", "an ember of light", "the last of the three; it rests on the shelf above the cliff", Vector3.one * 1.2f));
+            // The cliff, and the sun mirror on its top.
+            float topY = Height(-8f, 66f);
             float footY = Height(-8f, 52f);
             landmarks.Add(MakeLandmark("Cliff", world, new Vector3(-8f, footY + 5f, 57.2f), "CLIFF", "the cliff",
                 $"a wall of rock about {topY - footY:F0} m high, too steep to climb", new Vector3(70f, 12f, 4.5f)));
             landmarks.Add(MakeLandmark("Cliff Top", world, new Vector3(-8f, topY, 62f), "CLIFF_TOP", "the top of the cliff",
                 $"a shelf {topY - footY:F0} m above the ground below the cliff", new Vector3(70f, 4f, 9f)));
+            var sunShaft = MakeParticleMaterial("Mirror Shaft", softLine, 2.2f);
+            var mirrorParts = MakeMirror(world, new Vector3(-8f, topY, 66f), cube, cylinder, sphere, metal, oldIce, light, sunShaft, steamMaterial, vaultDoor, landmarks, travellerObject.transform);
 
-            // Loose stone near the start; ice on the frozen lake; metal by the ruins.
-            var random = new System.Random(42);
-            var pieces = new GameObject("Loose Pieces").transform;
-            var stonePlaces = new[] { new Vector2(-4f, -9f), new Vector2(5f, -11f), new Vector2(-7f, -17f), new Vector2(8f, -19f), new Vector2(-2f, -23f), new Vector2(3f, -6f), new Vector2(-11f, -12f), new Vector2(12f, -14f), new Vector2(0f, -30f), new Vector2(-15f, -25f) };
-            foreach (var p in stonePlaces) MakePickup(pieces, rocks[random.Next(rocks.Length)], stone, Matter.Stone, 2, p, 0.45f + 0.15f * (float)random.NextDouble(), random);
-            for (int i = 0; i < 7; i++)
-                MakePickup(pieces, rocks[random.Next(rocks.Length)], ice, Matter.Ice, 2, new Vector2(-36f + 10f * (float)random.NextDouble(), -30f + 12f * (float)random.NextDouble()), 0.5f, random);
-            // Ruins: dark slabs of the last builders, half sunk, with metal scattered round them.
-            var ruins = new GameObject("Ruins").transform;
+            // The great minds' slabs, dead now, and a few boulders.
+            var slabs = new GameObject("Slabs").transform;
+            slabs.SetParent(world, false);
             for (int i = 0; i < 4; i++)
             {
-                var slab = MakePart($"Slab {i}", ruins, monolith, metal, 1f);
-                var at = new Vector2(24f + 5f * i, -18f + 3f * Mathf.Sin(i * 2.1f));
+                var slab = MakePart($"Slab {i}", slabs, monolith, metal, 1f);
+                var at = new Vector2(24f + 5f * i, -14f + 3f * Mathf.Sin(i * 2.1f));
                 slab.transform.position = new Vector3(at.x, Height(at.x, at.y) + 1.2f, at.y);
                 slab.transform.localScale = new Vector3(1.4f, 4.5f + i, 0.6f);
                 slab.transform.rotation = Quaternion.Euler(8f * Mathf.Sin(i * 3f), 20f * i, 12f * Mathf.Cos(i * 2f));
@@ -356,51 +323,51 @@ namespace Game.Building
                 slab.receiveShadows = true;
                 slab.gameObject.AddComponent<MeshCollider>().sharedMesh = monolith;
             }
-            landmarks.Add(MakeLandmark("Ruins Place", ruins, new Vector3(31f, Height(31f, -18f), -18f), "RUINS", "the ruins", "dark slabs left by the last builders; metal lies round them", new Vector3(18f, 6f, 8f)));
-            for (int i = 0; i < 6; i++)
-                MakePickup(pieces, shard, metal, Matter.Metal, 2, new Vector2(22f + 16f * (float)random.NextDouble(), -23f + 9f * (float)random.NextDouble()), 0.6f, random);
-            landmarks.Add(MakeLandmark("Lake Place", pieces, new Vector3(-31f, Height(-31f, -24f), -24f), "FROZEN_LAKE", "the frozen lake", "old ice; loose ice lies on it", new Vector3(18f, 1f, 14f)));
-            foreach (var p in new[] { new Vector2(-14f, 47f), new Vector2(-10f, 44f), new Vector2(-4f, 48f), new Vector2(-17f, 51f), new Vector2(-1f, 52f), new Vector2(-12f, 52.5f), new Vector2(-7f, 41f), new Vector2(3f, 46f) })
-                MakePickup(pieces, rocks[random.Next(rocks.Length)], ice, Matter.Ice, 2, p, 0.55f, random);
-            foreach (var p in new[] { new Vector2(6f, 27f), new Vector2(-6f, 30f), new Vector2(9f, 44f) })
-                MakePickup(pieces, rocks[random.Next(rocks.Length)], stone, Matter.Stone, 2, p, 0.5f, random);
-            foreach (var p in new[] { new Vector2(25f, 30f), new Vector2(27f, 42f), new Vector2(10f, 33f) })
-                MakePickup(pieces, shard, metal, Matter.Metal, 2, p, 0.6f, random);
+            landmarks.Add(MakeLandmark("Slabs Place", slabs, new Vector3(31f, Height(31f, -14f), -14f), "SLABS", "the dark slabs",
+                "tall slabs the great minds left behind; dead and cold now", new Vector3(18f, 6f, 8f)));
+            landmarks.Add(MakeLandmark("Lake Place", world, new Vector3(-31f, Height(-31f, -24f), -24f), "FROZEN_LAKE", "the frozen lake", "a lake frozen solid", new Vector3(18f, 1f, 14f)));
+            var random = new System.Random(42);
+            var boulders = new GameObject("Boulders").transform;
+            foreach (var p in new[] { new Vector2(-9f, -8f), new Vector2(11f, -12f), new Vector2(-14f, 4f), new Vector2(7f, 22f), new Vector2(-12f, 33f), new Vector2(26f, 47f), new Vector2(-20f, 50f) })
+            {
+                var rock = MakePart("Boulder", boulders, rocks[random.Next(rocks.Length)], stone, 1f);
+                float size = 0.8f + 1.2f * (float)random.NextDouble();
+                rock.transform.localScale = new Vector3(size * 1.2f, size * 0.8f, size);
+                rock.transform.position = new Vector3(p.x, Height(p.x, p.y) + size * 0.2f, p.y);
+                rock.transform.rotation = Quaternion.Euler(0f, (float)random.NextDouble() * 360f, (float)random.NextDouble() * 20f);
+                rock.shadowCastingMode = ShadowCastingMode.On;
+                rock.gameObject.AddComponent<MeshCollider>().sharedMesh = rock.GetComponent<MeshFilter>().sharedMesh;
+            }
 
-            // ---- The maker, the reader and the director ----
+            // ---- The maker, the mind and the director ----
             var makerObject = new GameObject("Maker");
             var maker = makerObject.AddComponent<Maker>();
-            Wire(maker, ("cube", cube), ("cylinder", cylinder), ("sphere", ball), ("shard", shard), ("ghost", ghost), ("ideaGhost", ideaGhost),
-                ("slippery", slippery), ("sound", makerSound), ("doneClip", FindClip("build_complete_1")), ("apartClip", FindClip("build_apart_1")),
-                ("planClip", FindClip("build_plan_1")));
-            WireArray(maker, "matter", matters);
-            WireArray(maker, "flyClips", new[] { "build_fly_1", "build_fly_2", "build_fly_3" }.Select(n => (Object)FindClip(n)).Where(c => c != null).ToArray());
-            WireArray(maker, "lockClips", new[] { "build_lock_stone_1", "build_lock_ice_1", "build_lock_metal_1", "build_plan_2" }.Select(n => (Object)FindClip(n)).ToArray());
-            SetMask(maker, "ground", ~(1 << travellerLayer) & ~(1 << 2));
+            Wire(maker, ("cube", cube), ("cylinder", cylinder), ("sphere", ball), ("ghost", ghost), ("flame", flame),
+                ("slippery", slippery), ("bouncy", bouncy), ("sound", makerSound), ("doneClip", FindClip("build_complete_1")), ("apartClip", FindClip("build_apart_1")),
+                ("planClip", FindClip("build_plan_1")), ("boingClip", FindClip("spring_boing")), ("liftClip", FindClip("lift_loop")), ("fireClip", FindClip("fire_loop")));
+            WireArray(maker, "looks", looks);
+            WireArray(maker, "lockClips", new[] { "build_lock_stone_1", "build_lock_metal_1", "build_lock_ice_1", "build_lock_ice_2", "build_lock_stone_2", "build_plan_2" }.Select(n => (Object)FindClip(n)).ToArray());
+            SetMask(maker, "ground", notPicked);
 
-            var reader = new GameObject("Reader").AddComponent<Mind>();
-            Wire(reader, ("card", Load<TextAsset>($"{Root}/Story/Last Light card.txt")));
+            var mind = new GameObject("Mind").AddComponent<Mind>();
+            Wire(mind, ("card", Load<TextAsset>($"{Root}/Story/Drone card.txt")));
 
             var director = new GameObject("Director").AddComponent<LastLightDirector>();
-            Wire(director, ("traveller", traveller), ("follow", follow), ("body", body), ("mind", mind), ("maker", maker), ("reader", reader),
-                ("say", say), ("talk", talk), ("hud", hud), ("firstIdeaTo", landmarks.First(l => l.Id == "FAR_SIDE")),
-                ("ambience", ambience), ("wind", windSource), ("music", music), ("steps", stepsSource),
+            Wire(director, ("traveller", traveller), ("follow", follow), ("body", body), ("drone", drone), ("maker", maker), ("mind", mind),
+                ("say", say), ("talk", talk), ("hud", hud), ("gate", station.Gate), ("heartCase", station.Case), ("heart", station.Heart),
+                ("inside", station.Inside), ("farSide", farRegion), ("mirrorJoint", mirrorParts.Joint), ("socket", mirrorParts.Socket), ("mirror", mirrorParts.Mirror),
+                ("sunlight", sunlight), ("vaultLight", vaultLight), ("vaultDoor", vaultDoor), ("snow", snow),
+                ("ambience", ambience), ("wind", windSource), ("music", music), ("steps", stepsSource), ("finaleClip", FindClip("finale_2")),
                 ("jumpClip", FindClip("foley_jump_1")), ("landClip", FindClip("foley_land_1")));
-            WireArray(director, "embers", new Object[] { ember, ruinEmber, cliffEmber });
-            var mindWarp = mindObject.AddComponent<SpaceWarp>();
-            Wire(mindWarp, ("view", camera));
-            SetValue(mindWarp, "ring", 4f);
-            SetValue(mindWarp, "near", 1.5f);
-            Wire(director, ("gate", gate), ("holeWarp", warp), ("mindWarp", mindWarp), ("finaleClip", FindClip("finale_2")));
             WireArray(director, "landmarks", landmarks.Cast<Object>().ToArray());
             WireArray(director, "snowSteps", Clips("foley_step_snow", 6));
             WireArray(director, "stoneSteps", Clips("foley_step_stone", 6));
             WireArray(director, "iceSteps", Clips("foley_step_ice", 6));
 
             EditorSceneManager.SaveScene(scene, ScenePath);
+            // The Last Light is the game now: first in the build; the old scenes follow, unreached.
             var scenes = EditorBuildSettings.scenes.Where(s => s.path != ScenePath).ToList();
-            int opening = scenes.FindIndex(s => s.path.EndsWith("/Opening.unity"));
-            scenes.Insert(opening + 1, new EditorBuildSettingsScene(ScenePath, true));
+            scenes.Insert(0, new EditorBuildSettingsScene(ScenePath, true));
             EditorBuildSettings.scenes = scenes.ToArray();
             AssetDatabase.SaveAssets();
             Debug.Log($"Built {ScenePath}");
@@ -430,6 +397,8 @@ namespace Game.Building
             // The frozen lake, a shallow hollow.
             float lake = 1f - Smooth(0.7f, 1f, new Vector2((x + 31f) / 14f, (z + 24f) / 9f).magnitude);
             h -= lake * 0.6f;
+            // The hill the vault is dug into, behind where the survivor wakes.
+            h += 6.5f * (1f - Smooth(0.55f, 1f, new Vector2(x / 19f, (z + 36f) / 11.5f).magnitude));
             // Mountains round the edge.
             float sides = Mathf.Max(Smooth(62f, 98f, Mathf.Abs(x)), Smooth(-58f, -88f, z));
             h += sides * (34f + 22f * Mathf.PerlinNoise(x * 0.03f + 11f, z * 0.03f + 2f));
@@ -796,55 +765,168 @@ namespace Game.Building
             return landmark;
         }
 
-        static void MakePickup(Transform parent, Mesh mesh, Material material, Matter matter, int units, Vector2 at, float size, System.Random random)
+        /// <summary>
+        /// The drone: a white shell the size of a head (the survivor's porcelain: the same people made
+        /// both), a dark visor with one round eye in it, a fin each side with a strip of the eye's
+        /// light, a soft glow, a light of its own, a beam for making and carrying, and a camera behind
+        /// the eye that never sees the shell.
+        /// </summary>
+        static Drone MakeDrone(Transform traveller, Transform travellerBody, FollowCamera follow, int layer, Mesh sphere, Mesh ring, Mesh cube, Mesh billboard,
+            Material shellMaterial, Material visorMaterial, Material finMaterial, Material irisMaterial, Material pupilMaterial, Material glowMaterial, Material beamMaterial, Camera main)
         {
-            var piece = MakePart(Matters.Word(matter), parent, mesh, material, 1f);
-            piece.transform.localScale = new Vector3(size * (0.9f + 0.3f * (float)random.NextDouble()), size * (0.8f + 0.3f * (float)random.NextDouble()), size * (0.9f + 0.3f * (float)random.NextDouble()));
-            piece.transform.position = new Vector3(at.x, Height(at.x, at.y) + size * 0.22f, at.y);
-            piece.transform.rotation = Quaternion.Euler((float)random.NextDouble() * 30f, (float)random.NextDouble() * 360f, (float)random.NextDouble() * 30f);
-            piece.shadowCastingMode = ShadowCastingMode.On;
-            piece.receiveShadows = true;
-            var collider = piece.gameObject.AddComponent<SphereCollider>();
-            collider.radius = 0.5f;
-            piece.gameObject.AddComponent<Pickup>().Set(matter, units);
-        }
-
-        static Ember MakeEmber(string name, Transform parent, Vector3 at, Mesh sphere, Mesh billboard, Material coreMaterial, Material glowMaterial)
-        {
-            var holder = new GameObject(name);
-            holder.transform.SetParent(parent, false);
-            holder.transform.position = at;
-            var core = MakePart("Core", holder.transform, sphere, coreMaterial, 0.32f);
-            var glow = MakePart("Glow", holder.transform, billboard, glowMaterial, 3.2f);
+            var root = new GameObject("Drone") { layer = layer };
+            root.transform.position = traveller.position + new Vector3(0.8f, 1.95f, -0.2f);
+            var shell = Joint("Shell", root.transform, Vector3.zero, layer);
+            Renderer Bit(string name, Transform parent, Mesh mesh, Material material, Vector3 at, Vector3 scale, Vector3? euler = null)
+            {
+                var part = MakePart(name, parent, mesh, material, 1f);
+                part.gameObject.layer = layer;
+                part.transform.localPosition = at;
+                part.transform.localScale = scale;
+                part.transform.localRotation = Quaternion.Euler(euler ?? Vector3.zero);
+                part.shadowCastingMode = ShadowCastingMode.On;
+                return part;
+            }
+            Bit("Body", shell, sphere, shellMaterial, Vector3.zero, Vector3.one * 0.36f);
+            Bit("Band", shell, sphere, finMaterial, new Vector3(0f, 0f, -0.01f), new Vector3(0.372f, 0.05f, 0.372f));
+            Bit("Visor", shell, sphere, visorMaterial, new Vector3(0f, 0.005f, 0.128f), new Vector3(0.25f, 0.24f, 0.12f));
+            var irisPivot = Joint("Iris", shell, new Vector3(0f, 0.005f, 0.19f), layer);
+            var irisRenderer = Bit("Ring", irisPivot, ring, irisMaterial, Vector3.zero, Vector3.one * 0.13f, new Vector3(90f, 0f, 0f));
+            irisRenderer.shadowCastingMode = ShadowCastingMode.Off;
+            Bit("Pupil", irisPivot, sphere, pupilMaterial, new Vector3(0f, 0f, -0.002f), new Vector3(0.07f, 0.07f, 0.01f)).shadowCastingMode = ShadowCastingMode.Off;
+            foreach (float side in new[] { -1f, 1f })
+            {
+                var fin = Bit("Fin", shell, cube, finMaterial, new Vector3(side * 0.19f, 0.01f, -0.03f), new Vector3(0.025f, 0.13f, 0.17f), new Vector3(0f, side * 12f, side * -8f));
+                Bit("Strip", fin.transform, cube, irisMaterial, new Vector3(side * 0.6f, 0f, 0f), new Vector3(0.3f, 0.7f, 0.12f)).shadowCastingMode = ShadowCastingMode.Off;
+            }
+            var glow = Bit("Glow", root.transform, billboard, glowMaterial, Vector3.zero, Vector3.one * 0.95f);
+            glow.shadowCastingMode = ShadowCastingMode.Off;
             var shine = new GameObject("Shine").AddComponent<Light>();
-            shine.transform.SetParent(holder.transform, false);
+            shine.transform.SetParent(root.transform, false);
             shine.type = LightType.Point;
-            shine.color = new Color(1f, 0.55f, 0.25f);
-            shine.range = 12f;
-            shine.intensity = 3.5f;
-            shine.shadows = LightShadows.None;
-            var hum = MakeSource("Hum", holder.transform, FindClip("ember_hum") ?? FindClip("near_orb_loop"), true);
-            hum.spatialBlend = 1f;
-            hum.minDistance = 2f;
-            hum.maxDistance = 30f;
-            hum.rolloffMode = AudioRolloffMode.Linear;
+            shine.color = new Color(1f, 0.66f, 0.36f);
+            shine.range = 7f;
+            shine.intensity = 1.6f;
+            shine.shadows = LightShadows.Soft;
+            shine.shadowStrength = 0.6f;
+            var beam = new GameObject("Beam") { layer = layer }.AddComponent<LineRenderer>();
+            beam.transform.SetParent(root.transform, false);
+            beam.useWorldSpace = true;
+            beam.positionCount = 2;
+            beam.sharedMaterial = beamMaterial;
+            beam.widthCurve = new AnimationCurve(new Keyframe(0f, 0.05f), new Keyframe(1f, 0.16f));
+            beam.numCapVertices = 4;
+            beam.alignment = LineAlignment.View;
+            beam.shadowCastingMode = ShadowCastingMode.Off;
+            // The eye's own camera, just in front of the iris, blind to the shell.
+            var lensObject = new GameObject("Eye Camera") { layer = layer };
+            lensObject.transform.SetParent(irisPivot, false);
+            lensObject.transform.localPosition = new Vector3(0f, 0f, 0.03f);
+            var lens = lensObject.AddComponent<Camera>();
+            lens.enabled = false;
+            lens.fieldOfView = 60f;
+            lens.nearClipPlane = 0.1f;
+            lens.farClipPlane = 3000f;
+            lens.cullingMask = ~(1 << layer);
+            lens.clearFlags = CameraClearFlags.Skybox;
+            lens.allowHDR = true;
+            var lensData = lens.GetUniversalAdditionalCameraData();
+            lensData.renderPostProcessing = true;
+            lensData.antialiasing = AntialiasingMode.SubpixelMorphologicalAntiAliasing;
+            lensData.renderShadows = true;
+            var eye = root.AddComponent<Eye>();
+            Wire(eye, ("lens", lens));
+            var hum = MakeSource("Hum", root.transform, FindClip("companion_hum_loop"), true);
+            hum.spatialBlend = 0.6f;
             hum.playOnAwake = true;
-            hum.volume = 0.35f;
-            var ember = holder.AddComponent<Ember>();
-            Wire(ember, ("core", core), ("glow", glow), ("shine", shine), ("hum", hum));
-            return ember;
+            hum.volume = 0.2f;
+            var voice = MakeSource("Voice", root.transform, null, false);
+            voice.spatialBlend = 0.35f;
+            var drone = root.AddComponent<Drone>();
+            Wire(drone, ("travellerBody", travellerBody), ("follow", follow), ("shell", shell), ("iris", irisPivot), ("irisRenderer", irisRenderer),
+                ("glow", glow), ("shine", shine), ("beam", beam), ("eye", eye), ("hum", hum), ("voice", voice), ("moveClip", FindClip("drone_move")));
+            return drone;
         }
 
         /// <summary>
-        /// A square ruin, ten metres a side and four and a half high, of the last builders' dark metal.
-        /// Its door, in the wall facing the chasm, sinks into the ground while enough weight rests on
-        /// the plate before it. The ember waits inside.
+        /// The vault, dug into the hill behind where the survivor wakes: a concrete front, a round door
+        /// on a hinge, two small windows still warm inside, a light that wakes at the end.
         /// </summary>
-        static (Gate, Ember) MakeRuin(Transform parent, Vector3 centre, Mesh cube, Material wallMaterial, Material plateMaterial, Material lightMaterial,
-            Mesh sphere, Mesh billboard, Material emberCore, Material emberGlow, List<Landmark> landmarks, Transform traveller)
+        static (Light, Transform) MakeVault(Transform parent, Mesh cube, Mesh cylinder, Material concrete, Material metal, Material window, Material snow, List<Landmark> landmarks)
+        {
+            var root = new GameObject("Vault").transform;
+            root.SetParent(parent, false);
+            float y = Height(0f, -25.5f);
+            root.position = new Vector3(0f, y, -25.5f);
+            var front = MakePart("Front", root, cube, concrete, 1f);
+            front.transform.localPosition = new Vector3(0f, 1.6f, -2.5f);
+            front.transform.localScale = new Vector3(13f, 6.4f, 5f);
+            front.shadowCastingMode = ShadowCastingMode.On;
+            front.gameObject.AddComponent<BoxCollider>();
+            var lintel = MakePart("Lintel", root, cube, metal, 1f);
+            lintel.transform.localPosition = new Vector3(0f, 4.6f, 0.1f);
+            lintel.transform.localScale = new Vector3(13.6f, 0.5f, 0.6f);
+            lintel.shadowCastingMode = ShadowCastingMode.On;
+            var frame = MakePart("Door Frame", root, cylinder, metal, 1f);
+            frame.transform.localPosition = new Vector3(0f, 2f, 0.02f);
+            frame.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            frame.transform.localScale = new Vector3(4.1f, 0.1f, 4.1f);
+            // The door turns on a hinge at its left edge.
+            var hinge = new GameObject("Door Hinge").transform;
+            hinge.SetParent(root, false);
+            hinge.localPosition = new Vector3(-1.7f, 2f, 0.25f);
+            var door = MakePart("Door", hinge, cylinder, metal, 1f);
+            door.transform.localPosition = new Vector3(1.7f, 0f, 0f);
+            door.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            door.transform.localScale = new Vector3(3.4f, 0.17f, 3.4f);
+            door.shadowCastingMode = ShadowCastingMode.On;
+            door.gameObject.AddComponent<BoxCollider>().size = new Vector3(0.7f, 2f, 0.7f);
+            var wheel = MakePart("Wheel", door.transform, cylinder, metal, 1f);
+            wheel.transform.localPosition = new Vector3(0f, 1.3f, 0f);
+            wheel.transform.localScale = new Vector3(0.3f, 0.5f, 0.3f);
+            foreach (float side in new[] { -1f, 1f })
+            {
+                var pane = MakePart("Window", root, cube, window, 1f);
+                pane.transform.localPosition = new Vector3(side * 4.3f, 2.9f, 0.01f);
+                pane.transform.localScale = new Vector3(1.1f, 0.5f, 0.05f);
+                pane.shadowCastingMode = ShadowCastingMode.Off;
+            }
+            var cap = MakePart("Snow Cap", root, Resources.GetBuiltinResource<Mesh>("Sphere.fbx"), snow, 1f);
+            cap.transform.localPosition = new Vector3(0f, 4.9f, -3.5f);
+            cap.transform.localScale = new Vector3(15f, 2.6f, 8f);
+            cap.shadowCastingMode = ShadowCastingMode.On;
+            var warmth = new GameObject("Vault Light").AddComponent<Light>();
+            warmth.transform.SetParent(root, false);
+            warmth.transform.localPosition = new Vector3(0f, 2.5f, 2.5f);
+            warmth.type = LightType.Point;
+            warmth.color = new Color(1f, 0.7f, 0.4f);
+            warmth.range = 22f;
+            warmth.intensity = 0f;
+            warmth.shadows = LightShadows.Soft;
+            landmarks.Add(MakeLandmark("Vault Place", root, root.position + Vector3.up * 2f, "VAULT", "the vault door",
+                "the round door of the vault, sealed and frosted, in the snowbank; the last people sleep inside, and its windows are still faintly warm", new Vector3(13f, 6f, 2f)));
+            return (warmth, hinge);
+        }
+
+        struct Station
+        {
+            public Gate Gate;
+            public Collider Inside;
+            public Frozen Case;
+            public Holdable Heart;
+        }
+
+        /// <summary>
+        /// The old station: a square of dark stone walls ten metres a side, no roof. Its door, facing
+        /// the chasm, sinks into the ground while enough weight rests on the plate before it. Inside,
+        /// the last heart, frozen in a block of ice, and writing scratched on the north wall.
+        /// </summary>
+        static Station MakeStation(Transform parent, Vector3 centre, Mesh cube, Mesh cylinder, Mesh quad, Mesh sphere, Material wallMaterial, Material plateMaterial,
+            Material lightMaterial, Material iceMaterial, Material writingMaterial, Material steamMaterial, List<Landmark> landmarks, Transform traveller)
         {
             const float side = 10f, height = 4.5f, thick = 0.6f, door = 2.4f;
-            var root = new GameObject("Walled Ruin").transform;
+            var station = new Station();
+            var root = new GameObject("Station").transform;
             root.SetParent(parent, false);
             float baseY = Height(centre.x, centre.z);
             root.position = new Vector3(centre.x, baseY, centre.z);
@@ -864,6 +946,7 @@ namespace Game.Building
             float piece = (side - door) * 0.5f;
             Wall("South Wall Left", new Vector3(-(door + piece) * 0.5f, y, -side * 0.5f), new Vector3(piece + thick * 0.5f, tall, thick));
             Wall("South Wall Right", new Vector3((door + piece) * 0.5f, y, -side * 0.5f), new Vector3(piece + thick * 0.5f, tall, thick));
+            Wall("Floor", new Vector3(0f, -0.35f, 0f), new Vector3(side, 0.8f, side));
             var doorPart = MakePart("Door", root, cube, wallMaterial, 1f);
             doorPart.transform.localPosition = new Vector3(0f, height * 0.5f - 0.3f, -side * 0.5f);
             doorPart.transform.localScale = new Vector3(door + 0.1f, height - 0.2f, thick * 0.8f);
@@ -894,19 +977,255 @@ namespace Game.Building
             pressing.isTrigger = true;
             pressing.center = new Vector3(0f, 0.7f, 0f);
             pressing.size = new Vector3(1.7f, 1.2f, 1.7f);
-            var sound = MakeSource("Grinding", root, null, false);
-            sound.spatialBlend = 0.8f;
-            var gate = root.gameObject.AddComponent<Gate>();
-            Wire(gate, ("door", doorPart.transform), ("plate", plate.transform), ("pressing", pressing), ("traveller", traveller), ("sound", sound),
+            var grind = MakeSource("Grinding", root, null, false);
+            grind.spatialBlend = 0.8f;
+            station.Gate = root.gameObject.AddComponent<Gate>();
+            Wire(station.Gate, ("door", doorPart.transform), ("plate", plate.transform), ("pressing", pressing), ("traveller", traveller), ("sound", grind),
                 ("moveClip", FindClip("build_apart_2") ?? FindClip("build_lock_stone_2")));
 
-            var ember = MakeEmber("Ruin Ember", root, root.position + new Vector3(0f, 1.6f, 1f), sphere, billboard, emberCore, emberGlow);
-            landmarks.Add(MakeLandmark("Ember Place", ember.transform, ember.transform.position, "EMBER_2", "an ember of light", "the second of the three; it is inside the walled ruin", Vector3.one * 1.2f));
-            landmarks.Add(MakeLandmark("Ruin", root, root.position + Vector3.up * 2f, "RUIN", "the walled ruin",
-                $"a square ruin {side:F0} m across with walls {height} m high and no roof; its only door faces the chasm and is shut", new Vector3(side + 1.5f, height + 1f, side + 1.5f)));
-            landmarks.Add(MakeLandmark("Door", doorPart.transform, doorPart.transform.position, "DOOR", "the stone door", "the ruin's door, shut; it sinks into the ground while something heavy rests on the plate before it", new Vector3(1f, 1f, 1.6f)));
-            landmarks.Add(MakeLandmark("Plate Place", plateRoot, plateRoot.position, "PLATE", "the plate", "a square stone plate in the ground before the door; the traveller alone is too light to press it down", new Vector3(2f, 0.6f, 2f)));
-            return (gate, ember);
+            // Inside: everywhere within the walls.
+            var inside = new GameObject("Inside").AddComponent<BoxCollider>();
+            inside.transform.SetParent(root, false);
+            inside.isTrigger = true;
+            inside.center = new Vector3(0f, 1.5f, 0.3f);
+            inside.size = new Vector3(side - 1.4f, 3f, side - 1.8f);
+            inside.gameObject.layer = 2;
+            station.Inside = inside;
+
+            // The writing on the north wall, inside.
+            var message = MakePart("Writing", root, quad, writingMaterial, 1f);
+            message.transform.localPosition = new Vector3(-0.6f, 2.15f, side * 0.5f - thick * 0.5f - 0.02f);
+            message.transform.localScale = new Vector3(3.6f, 2.25f, 1f);
+            message.shadowCastingMode = ShadowCastingMode.Off;
+            landmarks.Add(MakeLandmark("Writing Place", message.transform, message.transform.position, "MESSAGE", "the writing on the wall",
+                "words scratched into the station's inner north wall, too small to read from the door", new Vector3(3.6f, 2.2f, 0.3f)));
+
+            // The heart: a barrel of dark metal banded with light, frozen in a block of ice.
+            var heartObject = new GameObject("Heart");
+            heartObject.transform.SetParent(root, false);
+            heartObject.transform.localPosition = new Vector3(1.2f, 0.05f, 0.8f);
+            var heartBody = MakePart("Cell", heartObject.transform, cylinder, wallMaterial, 1f);
+            heartBody.transform.localPosition = new Vector3(0f, 0.45f, 0f);
+            heartBody.transform.localScale = new Vector3(0.46f, 0.45f, 0.46f);
+            heartBody.shadowCastingMode = ShadowCastingMode.On;
+            heartBody.gameObject.AddComponent<BoxCollider>().size = new Vector3(1f, 2f, 1f);
+            foreach (float band in new[] { 0.2f, 0.62f, 0.84f })
+            {
+                var glowBand = MakePart("Band", heartObject.transform, cylinder, lightMaterial, 1f);
+                glowBand.transform.localPosition = new Vector3(0f, band, 0f);
+                glowBand.transform.localScale = new Vector3(0.48f, 0.025f, 0.48f);
+            }
+            var heartLight = new GameObject("Heart Light").AddComponent<Light>();
+            heartLight.transform.SetParent(heartObject.transform, false);
+            heartLight.transform.localPosition = new Vector3(0f, 1.1f, 0f);
+            heartLight.type = LightType.Point;
+            heartLight.color = new Color(1f, 0.72f, 0.4f);
+            heartLight.range = 4f;
+            heartLight.intensity = 1.2f;
+            var heartBodyRb = heartObject.AddComponent<Rigidbody>();
+            heartBodyRb.mass = 40f;
+            heartBodyRb.isKinematic = true;
+            heartBodyRb.interpolation = RigidbodyInterpolation.Interpolate;
+            heartObject.AddComponent<Heart>();
+            var heart = heartObject.AddComponent<Holdable>();
+            heart.Title = "the heart";
+            heart.Mass = 40f;
+            heart.Grip = new Vector3(0f, 0.45f, 0f);
+            station.Heart = heart;
+            landmarks.Add(MakeLandmark("Heart Place", heartObject.transform, heartObject.transform.position + Vector3.up * 0.35f, "HEART", "the heart",
+                "the last spare heart for the mirror: a power cell like a small barrel, 40 kg, banded with dim light", new Vector3(0.6f, 0.75f, 0.6f)));
+
+            var caseObject = new GameObject("Ice Case");
+            caseObject.transform.SetParent(root, false);
+            caseObject.transform.localPosition = heartObject.transform.localPosition;
+            var shell = MakePart("Ice", caseObject.transform, cube, iceMaterial, 1f);
+            shell.transform.localPosition = new Vector3(0f, 0.36f, 0f);
+            shell.transform.localScale = new Vector3(1.05f, 0.72f, 1.05f);
+            shell.transform.localRotation = Quaternion.Euler(0f, 17f, 0f);
+            shell.shadowCastingMode = ShadowCastingMode.On;
+            shell.gameObject.AddComponent<BoxCollider>();
+            var frozen = caseObject.AddComponent<Frozen>();
+            var (drips, steam, crack) = IceEffects(caseObject.transform, new Vector3(0f, 0.6f, 0f), 0.6f, steamMaterial);
+            Wire(frozen, ("shell", shell), ("drips", drips), ("steam", steam), ("sound", crack),
+                ("crackClip", FindClip("ice_crack")), ("breakClip", FindClip("ice_break")), ("meltClip", FindClip("ice_melt_loop")));
+            SetValue(frozen, "needs", 12f);
+            WireArray(frozen, "holds", new Object[] { heart });
+            station.Case = frozen;
+            landmarks.Add(MakeLandmark("Case Place", caseObject.transform, caseObject.transform.position + Vector3.up * 0.6f, "ICE_CASE", "the case of ice",
+                "a block of clear ice frozen round the heart; heat melts it and a pick breaks it", new Vector3(1.2f, 1.15f, 1.2f)));
+
+            landmarks.Add(MakeLandmark("Station Place", root, root.position + Vector3.up * 2f, "STATION", "the old station",
+                $"a square building of dark stone {side:F0} m across, walls {height} m high, no roof; its one door faces the chasm", new Vector3(side + 1.5f, height + 1f, side + 1.5f)));
+            landmarks.Add(MakeLandmark("Door", doorPart.transform, doorPart.transform.position, "DOOR", "the station door",
+                "a stone door; it sinks into the ground while something heavy (about 250 kg, more than three people) rests on the plate before it", new Vector3(1f, 1f, 1.6f)));
+            landmarks.Add(MakeLandmark("Plate Place", plateRoot, plateRoot.position, "PLATE", "the plate",
+                "a square stone plate in the ground before the door; the survivor alone is too light to press it down", new Vector3(2f, 0.6f, 2f)));
+            return station;
+        }
+
+        /// <summary>Drips and steam for ice as it melts, and a voice for it to crack and break with.</summary>
+        static (ParticleSystem, ParticleSystem, AudioSource) IceEffects(Transform parent, Vector3 at, float size, Material steamMaterial)
+        {
+            var drips = MakeParticles("Drips", parent, steamMaterial);
+            drips.transform.localPosition = at;
+            var main = drips.main;
+            main.loop = true;
+            main.playOnAwake = true;
+            main.startLifetime = 0.8f;
+            main.startSpeed = 0f;
+            main.startSize = new ParticleSystem.MinMaxCurve(0.03f, 0.06f);
+            main.startColor = new Color(0.7f, 0.85f, 1f, 0.9f);
+            main.gravityModifier = 1f;
+            main.simulationSpace = ParticleSystemSimulationSpace.World;
+            var emission = drips.emission;
+            emission.rateOverTime = 0f;
+            var shape = drips.shape;
+            shape.shapeType = ParticleSystemShapeType.Box;
+            shape.scale = Vector3.one * size * 1.8f;
+            var steam = MakeParticles("Steam", parent, steamMaterial);
+            steam.transform.localPosition = at + Vector3.up * size;
+            main = steam.main;
+            main.loop = true;
+            main.playOnAwake = true;
+            main.startLifetime = new ParticleSystem.MinMaxCurve(1.5f, 2.6f);
+            main.startSpeed = new ParticleSystem.MinMaxCurve(0.3f, 0.8f);
+            main.startSize = new ParticleSystem.MinMaxCurve(0.4f, 1f);
+            main.startColor = new Color(0.9f, 0.9f, 0.95f, 0.25f);
+            main.simulationSpace = ParticleSystemSimulationSpace.World;
+            emission = steam.emission;
+            emission.rateOverTime = 0f;
+            shape = steam.shape;
+            shape.shapeType = ParticleSystemShapeType.Box;
+            shape.scale = Vector3.one * size * 1.4f;
+            var fade = steam.colorOverLifetime;
+            fade.enabled = true;
+            var gradient = new Gradient();
+            gradient.SetKeys(new[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(Color.white, 1f) },
+                new[] { new GradientAlphaKey(0f, 0f), new GradientAlphaKey(1f, 0.2f), new GradientAlphaKey(0f, 1f) });
+            fade.color = gradient;
+            var crack = MakeSource("Ice Voice", parent, null, false);
+            crack.spatialBlend = 0.9f;
+            crack.minDistance = 3f;
+            crack.maxDistance = 40f;
+            return (drips, steam, crack);
+        }
+
+        struct MirrorParts
+        {
+            public Mirror Mirror;
+            public Frozen Joint;
+            public Socket Socket;
+        }
+
+        /// <summary>
+        /// The old sun mirror on the clifftop: a short tower, a joint crusted in ice, a great dish of
+        /// dark metal facing nowhere, an empty socket at the tower's foot, and the beam it will throw.
+        /// </summary>
+        static MirrorParts MakeMirror(Transform parent, Vector3 at, Mesh cube, Mesh cylinder, Mesh sphere, Material metal, Material ice, Material light,
+            Material shaftMaterial, Material steamMaterial, Transform vault, List<Landmark> landmarks, Transform traveller)
+        {
+            var parts = new MirrorParts();
+            var root = new GameObject("Sun Mirror").transform;
+            root.SetParent(parent, false);
+            root.position = at;
+            var tower = MakePart("Tower", root, cylinder, metal, 1f);
+            tower.transform.localPosition = new Vector3(0f, 1.4f, 0f);
+            tower.transform.localScale = new Vector3(0.9f, 1.4f, 0.9f);
+            tower.shadowCastingMode = ShadowCastingMode.On;
+            tower.gameObject.AddComponent<CapsuleCollider>();
+            var footing = MakePart("Footing", root, cylinder, metal, 1f);
+            footing.transform.localPosition = new Vector3(0f, 0.15f, 0f);
+            footing.transform.localScale = new Vector3(2.2f, 0.15f, 2.2f);
+            footing.gameObject.AddComponent<BoxCollider>().size = new Vector3(0.75f, 2f, 0.75f);
+            // The joint, and the dish that turns on it.
+            var jointPivot = new GameObject("Joint").transform;
+            jointPivot.SetParent(root, false);
+            jointPivot.localPosition = new Vector3(0f, 3f, 0f);
+            var knuckle = MakePart("Knuckle", jointPivot, sphere, metal, 0.75f);
+            knuckle.shadowCastingMode = ShadowCastingMode.On;
+            var dish = new GameObject("Dish").transform;
+            dish.SetParent(jointPivot, false);
+            // Facing away from the vault and down a little: dead.
+            dish.rotation = Quaternion.LookRotation(new Vector3(0.3f, -0.5f, 1f).normalized, Vector3.up);
+            var arm = MakePart("Arm", dish, cube, metal, 1f);
+            arm.transform.localPosition = new Vector3(0f, 0f, 0.5f);
+            arm.transform.localScale = new Vector3(0.25f, 0.25f, 1f);
+            var face = MakePart("Face", dish, sphere, metal, 1f);
+            face.transform.localPosition = new Vector3(0f, 0f, 1.1f);
+            face.transform.localScale = new Vector3(4.6f, 4.6f, 0.4f);
+            face.shadowCastingMode = ShadowCastingMode.On;
+            face.gameObject.AddComponent<BoxCollider>().size = new Vector3(0.9f, 0.9f, 0.5f);
+            var rim = MakePart("Rim", dish, MakeRing("Mirror Rim", 96, 0.93f, 1f), light, 1f);
+            rim.transform.localPosition = new Vector3(0f, 0f, 1.25f);
+            rim.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            rim.transform.localScale = Vector3.one * 4.65f;
+            rim.shadowCastingMode = ShadowCastingMode.Off;
+            var focus = new GameObject("Focus").transform;
+            focus.SetParent(dish, false);
+            focus.localPosition = new Vector3(0f, 0f, 3.2f);
+            // The ice on the joint.
+            var jointIce = new GameObject("Joint Ice");
+            jointIce.transform.SetParent(root, false);
+            jointIce.transform.localPosition = new Vector3(0f, 3f, 0f);
+            var crust = MakePart("Crust", jointIce.transform, sphere, ice, 1.35f);
+            crust.transform.localScale = new Vector3(1.5f, 1.3f, 1.5f);
+            crust.shadowCastingMode = ShadowCastingMode.On;
+            crust.gameObject.AddComponent<SphereCollider>().radius = 0.5f;
+            var frozen = jointIce.AddComponent<Frozen>();
+            var (drips, steam, crack) = IceEffects(jointIce.transform, Vector3.zero, 0.7f, steamMaterial);
+            Wire(frozen, ("shell", crust), ("drips", drips), ("steam", steam), ("sound", crack),
+                ("crackClip", FindClip("ice_crack")), ("breakClip", FindClip("ice_break")), ("meltClip", FindClip("ice_melt_loop")));
+            SetValue(frozen, "needs", 12f);
+            parts.Joint = frozen;
+            // The socket at the tower's foot, facing the way up from the cliff's edge.
+            var socketRoot = new GameObject("Socket").transform;
+            socketRoot.SetParent(root, false);
+            socketRoot.localPosition = new Vector3(0f, 0f, -1.4f);
+            var housing = MakePart("Housing", socketRoot, cube, metal, 1f);
+            housing.transform.localPosition = new Vector3(0f, 0.35f, 0f);
+            housing.transform.localScale = new Vector3(1f, 0.7f, 0.9f);
+            housing.shadowCastingMode = ShadowCastingMode.On;
+            housing.gameObject.AddComponent<BoxCollider>();
+            var seat = new GameObject("Seat").transform;
+            seat.SetParent(socketRoot, false);
+            seat.localPosition = new Vector3(0f, 0.7f, 0f);
+            var socketGlow = MakePart("Socket Glow", socketRoot, cylinder, light, 1f);
+            socketGlow.transform.localPosition = new Vector3(0f, 0.71f, 0f);
+            socketGlow.transform.localScale = new Vector3(0.6f, 0.01f, 0.6f);
+            socketGlow.enabled = false;
+            var socket = socketRoot.gameObject.AddComponent<Socket>();
+            socket.Set(seat, socketGlow);
+            parts.Socket = socket;
+            // The beam it will throw, and the light it will give.
+            var shaft = new GameObject("Beam").AddComponent<LineRenderer>();
+            shaft.transform.SetParent(root, false);
+            shaft.useWorldSpace = true;
+            shaft.positionCount = 2;
+            shaft.sharedMaterial = shaftMaterial;
+            shaft.alignment = LineAlignment.View;
+            shaft.numCapVertices = 6;
+            shaft.shadowCastingMode = ShadowCastingMode.Off;
+            var shine = new GameObject("Mirror Light").AddComponent<Light>();
+            shine.transform.SetParent(focus, false);
+            shine.type = LightType.Point;
+            shine.color = new Color(1f, 0.75f, 0.45f);
+            shine.range = 30f;
+            shine.intensity = 0f;
+            var hum = MakeSource("Mirror Sound", root, null, false);
+            hum.spatialBlend = 0.6f;
+            hum.minDistance = 6f;
+            hum.maxDistance = 120f;
+            parts.Mirror = root.gameObject.AddComponent<Mirror>();
+            Wire(parts.Mirror, ("dish", dish), ("face", face), ("focus", focus), ("beam", shaft), ("vault", vault),
+                ("shine", shine), ("sound", hum), ("wakeClip", FindClip("mirror_wake")), ("turnClip", FindClip("mirror_turn")));
+            SetValue(parts.Mirror, "sunDirection", SunDirection);
+            landmarks.Add(MakeLandmark("Mirror Place", root, root.position + Vector3.up * 2f, "MIRROR", "the sun mirror",
+                "the old sun mirror: a great dish on a short tower; turned to the sun, it threw light onto the vault and kept the valley warm", new Vector3(5f, 6f, 5f)));
+            landmarks.Add(MakeLandmark("Joint Place", jointIce.transform, jointIce.transform.position, "MIRROR_JOINT", "the mirror's joint",
+                "the joint the dish turns on, 3 m up the tower, crusted in thick ice; heat melts it, a pick breaks it", new Vector3(1.6f, 1.4f, 1.6f)));
+            landmarks.Add(MakeLandmark("Socket Place", socketRoot, socketRoot.position + Vector3.up * 0.5f, "SOCKET", "the mirror's socket",
+                "the socket for the mirror's heart, at the foot of its tower", new Vector3(1.1f, 0.9f, 1f)));
+            return parts;
         }
 
         static void Snow(ParticleSystem particles)
@@ -957,7 +1276,7 @@ namespace Game.Building
                 m.SetColor("_Emission", emission);
             });
 
-        static PhysicsMaterial MakePhysics(string name, float friction)
+        static PhysicsMaterial MakePhysics(string name, float friction, float bounce = 0f)
         {
             string path = $"{Root}/Materials/{name}.physicMaterial";
             var material = AssetDatabase.LoadAssetAtPath<PhysicsMaterial>(path);
@@ -969,6 +1288,8 @@ namespace Game.Building
             material.staticFriction = friction;
             material.dynamicFriction = friction;
             material.frictionCombine = PhysicsMaterialCombine.Minimum;
+            material.bounciness = bounce;
+            material.bounceCombine = bounce > 0f ? PhysicsMaterialCombine.Maximum : PhysicsMaterialCombine.Average;
             EditorUtility.SetDirty(material);
             return material;
         }

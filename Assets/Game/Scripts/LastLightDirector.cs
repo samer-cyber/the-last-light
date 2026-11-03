@@ -11,153 +11,203 @@ using UnityEngine.SceneManagement;
 namespace Game
 {
     /// <summary>
-    /// The end of time, from the traveller's waking. Every line the player speaks (hold Q) or writes
-    /// (Tab) goes to the mind; what the model reads it as, the game carries out: a plan drawn in
-    /// light and then made from what the mind holds, an idea drawn fainter for the player to accept,
-    /// a thing taken apart, a stroke or a ring for yes and no. The game, not the model, decides
-    /// what can be made and what it costs. The mind shows an idea of its own when the player is stuck.
+    /// The Last Light, from waking to the end. The great minds took the sun's light and the world
+    /// froze; the last people sleep in the vault; a small drone that stayed good wakes the survivor.
+    /// To warm the valley again they must bring the old sun mirror back: across the chasm, into the
+    /// station for its spare heart (frozen in ice), up the cliff, into the mirror's socket, its joint
+    /// thawed. The drone talks, sees and acts through Muse Spark: every line the survivor speaks
+    /// (hold Q) or writes (Tab) goes to the model with a picture from the drone's eye and the moment
+    /// (what is here, what was said); what comes back, the game does: words, a look, a thing made,
+    /// unmade or carried. The story's beats are written; everything said in between is the drone's.
     /// </summary>
     public class LastLightDirector : MonoBehaviour
     {
+        enum Stage { Wake, Cross, Enter, Free, Carry, End }
+
         [SerializeField] Traveller traveller;
         [SerializeField] FollowCamera follow;
         [SerializeField] TravellerBody body;
-        [SerializeField] Companion mind;
+        [SerializeField] Drone drone;
         [SerializeField] Maker maker;
-        [SerializeField] Mind reader;
+        [SerializeField] Mind mind;
         [SerializeField] SayLine say;
         [SerializeField] PushToTalk talk;
         [SerializeField] Hud hud;
-        [SerializeField] Ember[] embers;
-        [SerializeField] Gate gate;
-        [SerializeField, Tooltip("Bends the sky round the black hole; at the end the mind bends it instead.")] SpaceWarp holeWarp;
-        [SerializeField] SpaceWarp mindWarp;
-        [SerializeField] AudioClip finaleClip;
         [SerializeField] Landmark[] landmarks;
-        [SerializeField, Tooltip("The first idea the mind shows if the player is stuck at the start: a bridge from HERE to this place.")] Landmark firstIdeaTo;
+        [SerializeField] Gate gate;
+        [SerializeField] Frozen heartCase;
+        [SerializeField] Frozen mirrorJoint;
+        [SerializeField] Holdable heart;
+        [SerializeField] Socket socket;
+        [SerializeField] Mirror mirror;
+        [SerializeField, Tooltip("Inside the station's walls.")] Collider inside;
+        [SerializeField, Tooltip("The ground across the chasm.")] Collider farSide;
+        [SerializeField] Light sunlight;
+        [SerializeField] Light vaultLight;
+        [SerializeField] Transform vaultDoor;
+        [SerializeField] ParticleSystem snow;
         [SerializeField] AudioSource ambience;
         [SerializeField] AudioSource wind;
         [SerializeField] AudioSource music;
         [SerializeField] AudioSource steps;
         [SerializeField, Range(0f, 1f)] float ambienceVolume = 0.5f;
         [SerializeField, Range(0f, 1f)] float windVolume = 0.45f;
-        [SerializeField, Range(0f, 1f)] float musicVolume = 0.32f;
+        [SerializeField, Range(0f, 1f)] float musicVolume = 0.3f;
+        [SerializeField] AudioClip finaleClip;
         [SerializeField] AudioClip[] snowSteps;
         [SerializeField] AudioClip[] stoneSteps;
         [SerializeField] AudioClip[] iceSteps;
         [SerializeField] AudioClip jumpClip;
         [SerializeField] AudioClip landClip;
-        [SerializeField, Tooltip("Seconds without a word before the mind shows an idea of its own.")] float ideaAfter = 35f;
+        [SerializeField] string droneName = "Wick";
+        [SerializeField, Tooltip("Seconds without progress or a word before the drone offers an idea.")] float ideaAfter = 50f;
 
-        static readonly string[] Yes = { "yes", "yeah", "yep", "do it", "ok", "okay", "sure", "go", "go ahead", "make it", "build it", "please", "that", "that one", "y" };
+        const string Goal = "Bring the light back to the vault";
 
         readonly Queue<(string words, bool spoken)> waiting = new Queue<(string, bool)>();
-        Maker.Sketch pending, idea;
-        string pendingWords, ideaWords;
+        readonly Queue<Func<IEnumerator>> beats = new Queue<Func<IEnumerator>>();
+        readonly List<(string who, string words)> recent = new List<(string, string)>();
+        readonly List<string> remembered = new List<string>();
+        readonly HashSet<string> told = new HashSet<string>();
+        Stage stage = Stage.Wake;
+        string survivorName = "";
         bool arrived, handling, ended;
-        Pickup[] pickups;
-        int lines, gathered;
+        int lines;
         float quietSince;
+        Coroutine arriving;
         string logPath;
         readonly System.Random random = new System.Random(17);
 
+        public bool Busy => handling || maker.Busy || waiting.Count > 0 || beats.Count > 0;
+        public string StageName => stage.ToString();
+
         void Start()
         {
-            // The opening's lens belongs to the black hole now; SpaceWarp sets it every frame.
             logPath = Path.Combine(Application.persistentDataPath, "last-light-log.jsonl");
             say.Said += words => waiting.Enqueue((words, false));
+            say.Placeholder = "say something to " + droneName;
             talk.Spoken += wav => StartCoroutine(Hear(wav));
             talk.Trouble += words => hud.Note(words, 4f);
-            mind.Changed += ShowCarry;
-            traveller.Gathered += _ => gathered++;
             traveller.Jumped += () => Step(jumpClip, 0.5f);
             traveller.Landed += air => { if (air > 0.25f) Step(landClip, Mathf.Clamp01(air)); };
+            traveller.Took += Took;
+            traveller.Placed += _ => Progress();
             body.Stepped += (foot, pace) => Step(Footstep(), 0.25f + 0.12f * pace);
-            foreach (var e in embers) e.Watch(traveller.transform, mind);
-            foreach (var e in embers) e.Taken += Taken;
-            pickups = FindObjectsByType<Pickup>(FindObjectsSortMode.None);
-            if (gate) gate.Moved += open => { if (open) hud.Note("the door sinks into the ground", 4f); };
-            if (mindWarp) mindWarp.enabled = false;
-            StartCoroutine(Arrive());
+            if (gate) gate.Moved += open => { if (open) Beat("door", Line("The door's open!", "HAPPY")); };
+            if (heartCase) heartCase.Freed += _ => Beat("heart free", Line("It's free. It's heavy, so you'll have to carry it. Pick it up with E.", "HAPPY"), () => Hint("[E] pick up the heart", 8f));
+            if (mirrorJoint) mirrorJoint.Freed += _ => { Beat("joint free", Line("The joint's free. It can turn now.", "HAPPY")); Progress(); };
+            if (socket) socket.Filled += () => { Beat("socket", Line("The heart's in. I can feel it humming.", "HAPPY")); Progress(); };
+            arriving = StartCoroutine(Arrive());
             StartCoroutine(Answering());
-            StartCoroutine(Ideas());
+            StartCoroutine(Watch());
         }
 
         void Update()
         {
-            talk.Available = arrived && !ended && !say.IsOpen;
-            say.Available = arrived;
-            // While a plan waits for matter, loose pieces of that matter glint.
-            Matter? wanted = pending != null ? pending.Plan.Matter : (Matter?)null;
-            foreach (var p in pickups)
-                if (p) p.Glinting = wanted.HasValue && p.Matter == wanted.Value && Vector3.Distance(p.transform.position, traveller.transform.position) < 70f;
-            // A plan waiting for matter is made as soon as the mind holds enough.
-            if (pending != null && !handling && !maker.Busy && mind.Count(pending.Plan.Matter) >= pending.Plan.Cost)
-                StartCoroutine(MakePending());
+            bool open = arrived && !ended;
+            talk.Available = open && !say.IsOpen;
+            say.Available = open;
+            drone.Listening = open && (talk.Listening || say.IsOpen) && !handling;
+            drone.Level = talk.Level;
+            traveller.Attending = drone.Listening || drone.Speaking ? drone.transform.position : (Vector3?)null;
             var keys = Keyboard.current;
             if (keys == null) return;
+            if (ended && keys.rKey.wasPressedThisFrame) SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
-            if (keys.f1Key.wasPressedThisFrame) mind.Add(Matter.Stone, 10);
-            if (keys.f2Key.wasPressedThisFrame) mind.Add(Matter.Ice, 10);
-            if (keys.f3Key.wasPressedThisFrame) mind.Add(Matter.Metal, 10);
-            if (keys.f4Key.wasPressedThisFrame) mind.Add(Matter.Light, 10);
+            if (keys.f1Key.wasPressedThisFrame && heartCase) heartCase.Strike();
+            if (keys.f2Key.wasPressedThisFrame && mirrorJoint) mirrorJoint.Strike();
+            if (keys.f3Key.wasPressedThisFrame && socket && heart) socket.Fill(heart);
+            if (keys.f4Key.wasPressedThisFrame) End();
 #endif
         }
 
         /// <summary>Asks as if the player had written it (tests use this).</summary>
         public void Ask(string words) => waiting.Enqueue((words, false));
 
-        public bool Busy => handling || maker.Busy || waiting.Count > 0;
+        /// <summary>Skips the opening: the world at once, the goal shown (tests).</summary>
+        public void Skip()
+        {
+            if (arrived) return;
+            StopCoroutine(arriving);
+            hud.Black = 0f;
+            hud.White = 0f;
+            hud.HideCard();
+            traveller.Scripted = false;
+            follow.Scripted = false;
+            drone.Listening = false;
+            arrived = true;
+            stage = Stage.Cross;
+            ShowGoal();
+            if (ambience) ambience.volume = ambienceVolume;
+            if (wind) wind.volume = windVolume;
+            if (music && music.clip && !music.isPlaying)
+            {
+                music.volume = musicVolume;
+                music.Play();
+            }
+            lines = Mathf.Max(lines, 1);
+            quietSince = Time.time;
+        }
+
+        // ---- The beginning ----
 
         IEnumerator Arrive()
         {
-            hud.White = 1f;
-            hud.Black = 0f;
+            hud.Black = 1f;
             traveller.Scripted = true;
             follow.Scripted = true;
             hud.HideAim();
             if (ambience && ambience.clip) { ambience.volume = 0f; ambience.Play(); }
             if (wind && wind.clip) { wind.volume = 0f; wind.Play(); }
-            yield return new WaitForSeconds(0.8f);
-            hud.ShowTitle("A HUNDRED TRILLION YEARS LATER");
-            yield return new WaitForSeconds(3.4f);
-            hud.HideTitle();
-            // The mind comes down to the traveller from high above.
-            mind.transform.position = traveller.transform.position + Vector3.up * 14f + traveller.Body.forward * 6f;
-            for (float t = 0f; t < 5f; t += Time.deltaTime)
+            yield return new WaitForSeconds(1f);
+            hud.White = 0f;
+            foreach (string card in new[] { "WE MADE MINDS TO HELP US", "THE GREAT ONES STOPPED LISTENING.\nTHEY TOOK THE SUN'S LIGHT TO THINK WITH,\nAND THE WORLD FROZE", "ONE SMALL MIND STAYED GOOD" })
             {
-                float k = t / 5f;
-                hud.White = 1f - k * k * (3f - 2f * k);
+                hud.ShowCard(card);
+                yield return new WaitForSeconds(card.Length > 40 ? 6f : 3.6f);
+                hud.HideCard();
+                yield return new WaitForSeconds(1.4f);
+            }
+            // The drone's eye opens close to the survivor's face.
+            drone.Snap();
+            yield return Tween(4f, k =>
+            {
+                hud.Black = 1f - k * k * (3f - 2f * k);
                 if (ambience) ambience.volume = ambienceVolume * k;
                 if (wind) wind.volume = windVolume * k;
-                yield return null;
-            }
-            hud.White = 0f;
-            traveller.Scripted = false;
+            });
             follow.Scripted = false;
-            arrived = true;
-            quietSince = Time.time;
-            ShowCarry();
             if (music && music.clip)
             {
                 music.volume = 0f;
                 music.Play();
                 StartCoroutine(Tween(10f, k => music.volume = musicVolume * k));
             }
-            yield return new WaitForSeconds(1.5f);
-            hud.ShowHint("[W A S D] walk   [Shift] run   [Space] jump   [Mouse] look");
-            yield return new WaitForSeconds(7f);
-            hud.ShowHint("the last embers of light lie across the ice.   bring them to it");
-            yield return new WaitForSeconds(6f);
-            hud.ShowHint("it makes things from what you bring it.   [Q] hold and speak to it   [Tab] write to it");
+            drone.Listening = true;
+            yield return Speak("You're awake. Good. I wasn't sure you would be.", "HAPPY");
+            yield return Speak($"I'm {droneName}. The one who made me left me to watch the vault.", "CALM");
+            yield return Speak("The cold got in. The others won't wake unless the valley is warm again.", "SAD");
+            traveller.Scripted = false;
+            arrived = true;
+            yield return Speak("The old sun mirror on the cliff could warm it. Its heart is gone, but the station across the chasm kept spares.", "SURE");
+            stage = Stage.Cross;
+            ShowGoal();
+            yield return Speak("Talk to me. Ask me anything, or tell me what to make.", "CALM");
+            hud.ShowHint("[Q] hold and speak   [Tab] write   [W A S D] walk   [Mouse] look");
+            quietSince = Time.time;
+            while (lines == 0 && Time.time - quietSince < 25f) yield return null;
+            if (lines == 0) yield return Speak("Ask me how to cross, if you like. I'll think of something.", "CALM");
             while (lines == 0) yield return null;
             hud.HideHint();
         }
 
-        /// <summary>Speech, turned into words by Muse Voice Transcribe, then read like anything written.</summary>
+        // ---- Lines in, turns out ----
+
+        /// <summary>Speech, turned into words by Muse Voice Transcribe, then taken like anything written.</summary>
         IEnumerator Hear(byte[] wav)
         {
             hud.Waiting("…");
+            drone.Blip(false);
             string words = null, error = null;
             yield return MetaApi.Transcribe(wav, 15f, (w, e) => { words = w; error = e; });
             hud.StopListening();
@@ -174,10 +224,14 @@ namespace Game
         {
             while (true)
             {
-                while (waiting.Count == 0 || maker.Busy || ended) yield return null;
-                var (words, spoken) = waiting.Dequeue();
+                while (ended || (waiting.Count == 0 && beats.Count == 0) || maker.Busy) yield return null;
                 handling = true;
-                yield return Handle(words, spoken);
+                if (waiting.Count > 0)
+                {
+                    var (words, spoken) = waiting.Dequeue();
+                    yield return Handle(words, spoken);
+                }
+                else yield return beats.Dequeue()();
                 handling = false;
                 quietSince = Time.time;
             }
@@ -187,215 +241,566 @@ namespace Game
         {
             lines++;
             hud.Said(words, 4f);
-            // Accepting the idea on show needs no reading.
-            if (idea != null && Yes.Contains(Clean(words)))
+            hud.HideHint();
+            drone.Thinking = true;
+            var ids = Ids();
+            Vector3 lookAt = traveller.AimPoint ?? follow.View.transform.position + follow.View.transform.forward * 20f;
+            byte[] picture = drone.Picture(lookAt);
+            Turn turn = null;
+            yield return mind.Think(words, Moment(), ids.Keys.ToList(), picture, t => turn = t);
+            drone.Thinking = false;
+            Keep(turn);
+            Remember("survivor", words);
+            Remember("you", turn.Say);
+            Log(words, spoken, Mind.Describe(turn), turn.Seconds, turn.Source);
+            yield return Act(turn, ids, words, 0);
+        }
+
+        /// <summary>Says the turn's words and does its steps, in order. A look sends a second picture, and its answer is acted on too.</summary>
+        IEnumerator Act(Turn turn, Dictionary<string, Vector3> ids, string words, int depth)
+        {
+            var speaking = StartCoroutine(drone.Speak(turn.Say, turn.Mood, hud, droneName));
+            bool waitHere = false;
+            foreach (var step in turn.Steps)
             {
-                var accepted = idea;
-                idea = null;
-                maker.Hide(accepted);
-                yield return Build(accepted.Plan, ideaWords, null);
-                Log(words, spoken, "accept idea", 0f, "rules");
+                switch (step.verb)
+                {
+                    case "LOOK":
+                        if (depth > 0) continue;
+                        yield return speaking;
+                        yield return Look(step, ids, words);
+                        yield break;
+                    case "MAKE":
+                        yield return Make(step, ids, words);
+                        break;
+                    case "UNMAKE":
+                        yield return Unmake(step, ids);
+                        break;
+                    case "MOVE":
+                        yield return Move(step, ids);
+                        break;
+                    case "WAIT":
+                        waitHere = true;
+                        drone.GoTo = drone.transform.position;
+                        break;
+                    case "COME":
+                        drone.Release();
+                        break;
+                }
+            }
+            yield return speaking;
+            if (!waitHere) drone.Release();
+        }
+
+        IEnumerator Look(Step step, Dictionary<string, Vector3> ids, string words)
+        {
+            Vector3 target = Place(ids, step.target, "AIM");
+            // It will fly off to look much further than it will go to make or carry: seeing is quick.
+            if (Vector3.Distance(target, traveller.transform.position) > drone.Range * 2.5f)
+            {
+                yield return Speak("That's too far. I won't leave you alone out here.", "SORRY");
                 yield break;
             }
-
-            mind.Thinking = true;
-            var anchors = Anchors();
-            Thought thought = default;
-            yield return reader.Read(words, Moment(), anchors.Keys.ToList(), t => thought = t);
-            mind.Thinking = false;
-            Log(words, spoken, Mind.Describe(thought), thought.Seconds, thought.Source);
-
-            switch (thought.Kind)
-            {
-                case "build" when thought.Wishes.Count > 0:
-                    ClearIdea();
-                    foreach (var wish in thought.Wishes)
-                    {
-                        var plan = Design(wish, anchors, out string problem);
-                        if (plan == null)
-                        {
-                            mind.Cannot();
-                            hud.Note(problem, 4f);
-                            break;
-                        }
-                        yield return Build(plan, words, null);
-                        while (maker.Busy) yield return null;
-                        if (pending != null) break;
-                    }
-                    break;
-                case "idea" when thought.Wishes.Count > 0:
-                    ClearIdea();
-                    var ideaPlan = Design(thought.Wishes[0], anchors, out string why);
-                    if (ideaPlan == null)
-                    {
-                        mind.Unsure();
-                        hud.Note(why, 4f);
-                        break;
-                    }
-                    ShowIdea(ideaPlan, words);
-                    break;
-                case "undo":
-                    var target = traveller.AimPoint.HasValue ? maker.Nearest(traveller.AimPoint.Value, 5f) : null;
-                    if (!target) target = maker.Made.LastOrDefault(b => b);
-                    if (!target)
-                    {
-                        mind.Unsure();
-                        hud.Note("it has made nothing to take apart", 3f);
-                        break;
-                    }
-                    yield return maker.Unmake(target, mind);
-                    mind.Mark(true);
-                    break;
-                case "question" when thought.Answer != Sign.Unknowable:
-                    mind.Mark(thought.Answer == Sign.Yes);
-                    break;
-                default:
-                    if (thought.Refusal == "NOTHING_FROM_NOTHING")
-                    {
-                        mind.Cannot();
-                        hud.Note("it cannot shape that from stone, ice, metal or light", 4f);
-                    }
-                    else mind.Unsure();
-                    break;
-            }
+            string title = Title(step.target);
+            yield return drone.Fly(drone.Vantage(target, Size(step.target)), target, 0.6f, 12f);
+            yield return new WaitForSeconds(0.35f);
+            byte[] picture = drone.Picture(target);
+            hud.Photo(drone.Eye.Last, $"{droneName.ToUpperInvariant()}'S EYE   ·   {title.ToUpperInvariant()}");
+            drone.Thinking = true;
+            Turn seen = null;
+            string question = $"(You flew to {title} ({step.target}) and looked closely: the picture is what you see now. Tell the survivor what you see that matters; if there is writing, read it out word for word.) The survivor had said: \"{words}\"";
+            yield return mind.Think(question, Moment(), ids.Keys.ToList(), picture, t => seen = t);
+            drone.Thinking = false;
+            Keep(seen);
+            Remember("you", seen.Say);
+            Log("(look at " + step.target + ") " + words, false, Mind.Describe(seen), seen.Seconds, seen.Source);
+            yield return Act(seen, ids, words, 1);
         }
 
-        /// <summary>Draws the plan, then makes it if the mind holds enough, or leaves it waiting.</summary>
-        IEnumerator Build(Maker.Plan plan, string words, Action done)
+        IEnumerator Make(Step step, Dictionary<string, Vector3> ids, string words)
         {
-            if (pending != null)
+            var spec = step.thing;
+            bool toHands = step.target == "ME";
+            bool way = spec.form is "BRIDGE" or "STAIRS" or "RAMP" or "LIFT";
+            Vector3 survivor = traveller.transform.position;
+            Vector3 forward = Flat(follow.View.transform.forward).normalized;
+            Vector3 at;
+            if (toHands) at = survivor + forward * 1.3f;
+            else if (way) at = step.target == "AIM" ? Place(ids, "AIM", "HERE") : survivor;
+            else if (step.target is "HERE" or "NONE" or "YOU") at = survivor + forward * 2f;
+            else at = Beside(ids, step.target);
+            Vector3 to = way ? Place(ids, step.to != "NONE" ? step.to : step.target is "HERE" or "ME" or "NONE" ? "AIM" : step.target, "AIM") : at;
+            var plan = maker.Design(new Maker.Request { Spec = spec, At = at, To = to, Viewer = survivor, ToHands = toHands }, out string problem);
+            if (plan == null)
             {
-                maker.Hide(pending);
-                pending = null;
+                yield return Speak(Sentence(problem ?? "I can't shape that here"), "SORRY");
+                yield break;
             }
-            var sketch = maker.Show(plan, false);
-            mind.Attending = plan.Centre;
-            yield return new WaitForSeconds(1.1f);
-            int have = mind.Count(plan.Matter);
-            if (have >= plan.Cost)
+            if (Vector3.Distance(plan.Centre, survivor) > drone.Range)
             {
-                yield return maker.Make(sketch, mind, words, _ => { });
-                mind.Attending = null;
-                mind.Mark(true);
+                yield return Speak("That's too far from you. I won't leave you alone out here.", "SORRY");
+                yield break;
             }
+            var sketch = maker.Show(plan);
+            yield return drone.Fly(drone.Vantage(plan.Centre, plan.Extent), plan.Centre, 1.2f, 3f);
+            yield return new WaitForSeconds(0.3f);
+            Built made = null;
+            yield return maker.Make(sketch, drone, words, b => made = b);
+            if (made && made.TryGetComponent<Floater>(out var f)) f.Hover = 0.35f;
+            if (toHands && made && made.TryGetComponent<Holdable>(out var holdable) && holdable.CanHold) traveller.Take(holdable);
+            drone.Nod();
+            if (made && made.TryGetComponent<Tool>(out var tool))
+                StartCoroutine(Hint(tool.Kind == Tool.Use.Heat ? "[Mouse] hold the flame to the ice" : tool.Kind == Tool.Use.Break ? "[Mouse] strike the ice" : "[E] put it down", 7f));
+            else if (made && made.GetComponent<Floater>()) StartCoroutine(Hint(traveller.Holding == made.GetComponent<Holdable>() ? "hold on: it lifts you.   [E] let go" : "[E] take the cord, and hold on.   [E] again to let go", 7f));
+        }
+
+        IEnumerator Unmake(Step step, Dictionary<string, Vector3> ids)
+        {
+            var target = maker.Find(step.target);
+            if (!target && traveller.AimPoint.HasValue) target = maker.Nearest(traveller.AimPoint.Value, 5f);
+            if (!target) target = maker.Made.LastOrDefault(b => b);
+            if (!target)
+            {
+                yield return Speak("I haven't made anything to take apart.", "SORRY");
+                yield break;
+            }
+            if (traveller.Holding && traveller.Holding.transform == target.transform) traveller.Release();
+            yield return drone.Fly(drone.Vantage(target.Centre, 2f), target.Centre, 1.5f, 3f);
+            drone.Beam(target.Centre);
+            yield return maker.Unmake(target);
+            drone.Beam(null);
+        }
+
+        /// <summary>Carries a loose thing (or one it made) to a place under its beam, slowly if heavy.</summary>
+        IEnumerator Move(Step step, Dictionary<string, Vector3> ids)
+        {
+            Transform thing = null;
+            float mass = 10f;
+            var built = maker.Find(step.target);
+            if (built)
+            {
+                thing = built.transform;
+                mass = built.Mass;
+            }
+            else if (step.target == "HEART" && heart)
+            {
+                thing = heart.transform;
+                mass = heart.Mass;
+                if (heart.Locked && socket && !socket.Full)
+                {
+                    yield return Speak("It's still frozen in. The ice has to go first.", "SORRY");
+                    yield break;
+                }
+            }
+            else if (step.target == "AIM" && traveller.AimedBuilt) { thing = traveller.AimedBuilt.transform; mass = traveller.AimedBuilt.Mass; }
             else
             {
-                maker.Wanting(sketch, true);
-                pending = sketch;
-                pendingWords = words;
-                mind.Attending = null;
-                string matter = Matters.Word(plan.Matter);
-                hud.Note($"it needs {plan.Cost - have} more {matter}", 5f);
-                if (plan.Matter == Matter.Light) hud.ShowHint("light comes from embers");
-                else hud.ShowHint($"[E] gather {matter} for it");
-                StartCoroutine(HideHintLater(7f));
+                var landmark = landmarks.FirstOrDefault(l => l && l.Id == step.target);
+                var body = landmark ? landmark.GetComponentInParent<Rigidbody>() : null;
+                if (step.target == "AIM" && traveller.AimPoint.HasValue)
+                    foreach (var c in Physics.OverlapSphere(traveller.AimPoint.Value, 0.6f))
+                        if (c.attachedRigidbody && !c.attachedRigidbody.isKinematic) { body = c.attachedRigidbody; break; }
+                if (body && !body.isKinematic)
+                {
+                    thing = body.transform;
+                    mass = body.mass;
+                }
             }
-            done?.Invoke();
-        }
-
-        IEnumerator MakePending()
-        {
-            handling = true;
-            var sketch = pending;
-            pending = null;
-            maker.Wanting(sketch, false);
-            mind.Attending = sketch.Plan.Centre;
-            yield return new WaitForSeconds(0.4f);
-            yield return maker.Make(sketch, mind, pendingWords, _ => { });
-            mind.Attending = null;
-            mind.Mark(true);
-            handling = false;
-        }
-
-        void ShowIdea(Maker.Plan plan, string words)
-        {
-            idea = maker.Show(plan, true);
-            ideaWords = words;
-            mind.Attending = plan.Centre;
-            hud.Note($"an idea: a {plan.Summary}.   say \"do it\" to make it", 6f);
-            StartCoroutine(StopAttending(3f));
-        }
-
-        void ClearIdea()
-        {
-            if (idea == null) return;
-            maker.Hide(idea);
-            idea = null;
-        }
-
-        /// <summary>Turns a wish into a plan: places from the anchors, matter from what the mind holds.</summary>
-        Maker.Plan Design(Wish wish, Dictionary<string, Vector3> anchors, out string problem)
-        {
-            Vector3 Place(string id, string fallback) =>
-                anchors.TryGetValue(id, out var p) && id != "NONE" ? p : anchors[fallback];
-            Matter matter;
-            if (wish.Kind == "LAMP") matter = Matter.Light;
-            else if (!Matters.TryParse(wish.Matter, out matter))
+            if (!thing || mass > 5000f)
             {
-                // Unsaid: what it holds most of, keeping its own light for last.
-                matter = Matters.All.Where(m => m != Matter.Light).OrderByDescending(mind.Count).First();
-                if (mind.Count(matter) == 0) matter = Matter.Stone;
+                yield return Speak(thing ? "Too heavy, even for me." : "I can't lift that. It's part of the world.", "SORRY");
+                yield break;
             }
-            // A way across or up (a bridge, stairs, a ramp) starts where the traveller stands, or
-            // where they look; the model sometimes names the thing climbed as the start.
-            bool way = wish.Kind == "BRIDGE" || wish.Kind == "STAIRS" || wish.Kind == "RAMP";
-            string fromId = way && wish.From != "AIM" ? "HERE" : wish.From;
-            var request = new Maker.Request
+            var holdable = thing.GetComponent<Holdable>();
+            if (holdable && holdable.Held) traveller.Release();
+            Vector3 destination = step.to == "ME" || step.to == "HERE" ? traveller.transform.position + Flat(follow.View.transform.forward).normalized * 1.6f : Place(ids, step.to, "AIM");
+            if (step.to == "SOCKET" && socket) destination = socket.Seat;
+            if (Vector3.Distance(destination, traveller.transform.position) > drone.Range || Vector3.Distance(thing.position, traveller.transform.position) > drone.Range)
             {
-                Kind = wish.Kind,
-                Matter = matter,
-                From = Place(fromId, "HERE"),
-                To = Place(wish.To, "AIM"),
-                Size = wish.Size == "SMALL" ? 0.6f : wish.Size == "LARGE" ? 1.6f : 1f,
-                Height = wish.Height,
-                Length = wish.Length,
+                yield return Speak("That's too far from you. I won't leave you alone out here.", "SORRY");
+                yield break;
+            }
+            var rb = thing.GetComponent<Rigidbody>();
+            bool wasKinematic = rb && rb.isKinematic;
+            var bounds = Bounds(thing);
+            float hang = bounds.extents.y + 0.9f;
+            float slow = Mathf.Lerp(1f, 0.35f, Mathf.InverseLerp(50f, 4000f, mass));
+            yield return drone.Fly(bounds.center + Vector3.up * (hang + 0.6f), bounds.center, 0.5f, 6f);
+            if (rb) rb.isKinematic = true;
+            foreach (var c in thing.GetComponentsInChildren<Collider>()) c.enabled = false;
+            Vector3 offset = thing.position - bounds.center;
+            // Lifted, carried over, set down.
+            Vector3 over = destination + Vector3.up * (hang + bounds.extents.y + 1.2f);
+            drone.GoTo = over;
+            drone.LookAt = destination;
+            for (float t = 0f; t < 14f / slow && Vector3.Distance(drone.transform.position, over) > 0.6f; t += Time.deltaTime)
+            {
+                Vector3 hold = drone.transform.position + Vector3.down * hang;
+                thing.position = Vector3.Lerp(thing.position, hold + offset, 1f - Mathf.Exp(-4f * slow * Time.deltaTime));
+                drone.Beam(thing.position - offset);
+                yield return null;
+            }
+            maker.GroundAt(destination, out float floor, 8f);
+            Vector3 down = new Vector3(destination.x, Mathf.Max(floor, destination.y) + bounds.extents.y + 0.05f, destination.z) + offset;
+            for (float t = 0f; t < 1.4f; t += Time.deltaTime)
+            {
+                thing.position = Vector3.Lerp(thing.position, down, 1f - Mathf.Exp(-5f * Time.deltaTime));
+                drone.Beam(thing.position - offset);
+                yield return null;
+            }
+            drone.Beam(null);
+            foreach (var c in thing.GetComponentsInChildren<Collider>()) c.enabled = true;
+            if (rb) rb.isKinematic = wasKinematic && !(heart && thing == heart.transform);
+            if (heart && thing == heart.transform && socket && !socket.Full && Vector3.Distance(thing.position, socket.Seat) < 2.5f) socket.Fill(heart);
+        }
+
+        // ---- The story's beats ----
+
+        /// <summary>Watches where the survivor is and what is done, and moves the story on.</summary>
+        IEnumerator Watch()
+        {
+            while (!arrived) yield return null;
+            while (!ended)
+            {
+                yield return new WaitForSeconds(0.25f);
+                Vector3 p = traveller.transform.position;
+                if (stage == Stage.Cross && farSide && farSide.bounds.Contains(p))
+                {
+                    stage = Stage.Enter;
+                    ShowGoal();
+                    Beat("across", Line("We're across. The station's just ahead.", "HAPPY"));
+                }
+                if (!told.Contains("plate") && gate && Vector3.Distance(p, gate.transform.position) < 9f && !gate.Open)
+                    Beat("plate", Line("The door's shut. There's a plate in the ground before it.", "CURIOUS"));
+                if (stage <= Stage.Enter && inside && inside.bounds.Contains(p))
+                {
+                    stage = Stage.Free;
+                    ShowGoal();
+                    Beat("inside", Line("There it is. The last heart, frozen in.", "CURIOUS"), ReadTheWall);
+                }
+                // However they got here, a free heart means carrying it.
+                if (stage < Stage.Carry && heartCase && heartCase.Free)
+                {
+                    stage = Stage.Carry;
+                    ShowGoal();
+                }
+                var top = landmarks.FirstOrDefault(l => l && l.Id == "MIRROR");
+                if (!told.Contains("mirror") && top && Vector3.Distance(p, top.Point) < 12f && Mathf.Abs(p.y - top.Point.y) < 5f)
+                    Beat("mirror", Line(socket && socket.Full ? "Here it is. The joint's frozen." : "The socket's empty, and its joint is frozen solid.", "WORRIED"));
+                // Quiet and stuck: an idea of its own, from what it sees.
+                if (!handling && !Busy && !talk.Listening && !say.IsOpen && Time.time - quietSince > ideaAfter)
+                {
+                    quietSince = Time.time;
+                    beats.Enqueue(Idea);
+                }
+            }
+        }
+
+        void Took(Holdable thing)
+        {
+            if (heart && thing == heart) Beat("carry", Line("Now up to the mirror on the cliff. I'll help you up.", "SURE"));
+        }
+
+        void Progress()
+        {
+            ShowGoal();
+            if (!ended && socket && socket.Full && mirrorJoint && mirrorJoint.Free) StartCoroutine(Finale());
+        }
+
+        void ShowGoal()
+        {
+            string step = stage switch
+            {
+                Stage.Cross => "Get across the chasm",
+                Stage.Enter => "Get into the old station",
+                Stage.Free => "Free the heart from the ice",
+                Stage.Carry when socket && !socket.Full && mirrorJoint && !mirrorJoint.Free => "Take the heart to the mirror, and thaw its joint",
+                Stage.Carry when socket && !socket.Full => "Set the heart in the mirror's socket",
+                Stage.Carry => "Thaw the mirror's frozen joint",
+                _ => "",
             };
-            if (Vector3.Distance(request.From, request.To) < 0.5f && wish.Kind == "BRIDGE") request.To = anchors["AIM"];
-            return maker.Design(request, out problem);
+            hud.Goal(stage == Stage.Wake || stage == Stage.End ? null : Goal, step);
         }
 
-        /// <summary>Every place the mind may name now, by id: here, where the player looks, itself, and the named places it knows.</summary>
-        Dictionary<string, Vector3> Anchors()
+        string StageWords() => stage switch
         {
-            var anchors = new Dictionary<string, Vector3>
+            Stage.Cross => "get across the chasm to the station",
+            Stage.Enter => "get into the station; the spare hearts are inside",
+            Stage.Free => "free the heart from its case of ice",
+            Stage.Carry => (socket && !socket.Full ? "carry the heart up the cliff and set it in the mirror's socket" : "") +
+                           (socket && !socket.Full && mirrorJoint && !mirrorJoint.Free ? ", and " : "") +
+                           (mirrorJoint && !mirrorJoint.Free ? "thaw or break the ice on the mirror's joint" : ""),
+            _ => "wake up",
+        };
+
+        /// <summary>A story line the drone says once, when it happens.</summary>
+        void Beat(string key, params Func<IEnumerator>[] parts)
+        {
+            if (told.Contains(key)) return;
+            told.Add(key);
+            foreach (var part in parts) beats.Enqueue(part);
+        }
+
+        Func<IEnumerator> Line(string words, string mood) => () => Speak(words, mood);
+
+        IEnumerator Hint(string text, float seconds)
+        {
+            hud.ShowHint(text);
+            yield return new WaitForSeconds(seconds);
+            hud.HideHint();
+        }
+
+        /// <summary>Inside the station: it flies to the writing on the wall, takes a picture, and reads it.</summary>
+        IEnumerator ReadTheWall()
+        {
+            var ids = Ids();
+            if (!ids.ContainsKey("MESSAGE")) yield break;
+            yield return Speak("Someone wrote on the wall. Let me see.", "CURIOUS");
+            yield return Look(new Step { verb = "LOOK", target = "MESSAGE", to = "NONE", thing = Mind.Plain("BLOCK", "thing") }, ids, "what does the writing on the wall say?");
+        }
+
+        /// <summary>When the survivor has gone quiet: one idea, from what the drone sees and the step they are on.</summary>
+        IEnumerator Idea()
+        {
+            if (ended || stage == Stage.Wake) yield break;
+            var ids = Ids();
+            drone.Thinking = true;
+            byte[] picture = drone.Picture(traveller.AimPoint ?? follow.View.transform.position + follow.View.transform.forward * 20f);
+            Turn idea = null;
+            yield return mind.Think("(The survivor has gone quiet for a while. Offer one idea, in one or two sentences, for what to do next, as a question they can say yes to. Do not act yet: no steps.)", Moment(), ids.Keys.ToList(), picture, t => idea = t);
+            drone.Thinking = false;
+            idea.Steps.Clear();
+            Remember("you", idea.Say);
+            Log("(quiet)", false, Mind.Describe(idea), idea.Seconds, idea.Source);
+            yield return drone.Speak(idea.Say, idea.Mood, hud, droneName);
+        }
+
+        IEnumerator Speak(string words, string mood)
+        {
+            Remember("you", words);
+            yield return drone.Speak(words, mood, hud, droneName);
+        }
+
+        // ---- The end ----
+
+        /// <summary>Plays the ending at once (tests).</summary>
+        public void End()
+        {
+            if (!ended) StartCoroutine(Finale());
+        }
+
+        /// <summary>
+        /// The mirror wakes and turns to the sun, but the sun is too dim. The drone says goodbye in its
+        /// own words, flies into the mirror's light and burns everything it has; the beam falls on the
+        /// vault, the valley warms, the vault opens. The drone falls dark. Its eye flickers once.
+        /// </summary>
+        IEnumerator Finale()
+        {
+            ended = true;
+            stage = Stage.End;
+            hud.Goal(null, null);
+            hud.HideHint();
+            while (handling && !maker.Busy) yield return null;
+            yield return new WaitForSeconds(1.2f);
+            traveller.Scripted = true;
+            traveller.Release();
+            drone.Release();
+            yield return Speak("It's waking!", "HAPPY");
+            float from = music ? music.volume : 0f;
+            StartCoroutine(Tween(3f, k => { if (music) music.volume = from * (1f - k); }));
+            follow.Face(Yaw(mirror.transform.position), 8f);
+            yield return mirror.Turn(5f);
+            yield return Tween(2f, k => mirror.Shine(0.12f * k));
+            yield return Speak("It's not enough. The sun's too dim.", "WORRIED");
+
+            // Its goodbye, in its own words.
+            Turn goodbye = null;
+            var ids = Ids();
+            drone.Thinking = true;
+            yield return mind.Think("(The mirror is turning, but the sun is too dim to warm the vault. You have decided to give the mirror your own light, though it will leave you dark. Say goodbye to the survivor in one or two short sentences, warmly; use their name if you know it, and something they said to you if it fits. Do not explain the plan. No steps.)",
+                Moment(), ids.Keys.ToList(), null, t => goodbye = t);
+            drone.Thinking = false;
+            string farewell = goodbye != null && goodbye.Source != "offline" && goodbye.Say.Length > 0 ? goodbye.Say : "I have a little light left. It was always for this.";
+            Log("(goodbye)", false, farewell, goodbye?.Seconds ?? 0f, goodbye?.Source ?? "rules");
+            if (music && finaleClip)
             {
-                ["HERE"] = traveller.transform.position,
-                ["AIM"] = traveller.AimPoint ?? traveller.transform.position + Flat(follow.transform.forward) * 6f,
-                ["MIND"] = mind.transform.position,
-                ["NONE"] = traveller.transform.position,
+                music.clip = finaleClip;
+                music.volume = 0.6f;
+                music.Play();
+            }
+            yield return Speak(farewell, "SAD");
+            yield return new WaitForSeconds(0.8f);
+
+            // Into the mirror's light. Seen from high behind the mirror, the beam reaching across the valley to the vault.
+            Vector3 away = Flat(mirror.transform.position - mirror.Vault).normalized;
+            follow.Shot(mirror.transform.position + away * 12f + Vector3.up * 9f + Vector3.Cross(Vector3.up, away) * 6f, Vector3.Lerp(mirror.transform.position, mirror.Vault, 0.55f), 0.8f);
+            yield return drone.Fly(mirror.Focus, mirror.Focus + Vector3.down, 0.4f, 6f);
+            var fogFrom = RenderSettings.fogColor;
+            var ambientFrom = RenderSettings.ambientSkyColor;
+            float sunFrom = sunlight ? sunlight.intensity : 1f;
+            var sunColourFrom = sunlight ? sunlight.color : Color.white;
+            yield return Tween(9f, k =>
+            {
+                drone.Brightness = 1f + 7f * k * k;
+                mirror.Shine(0.12f + 0.88f * Mathf.SmoothStep(0f, 1f, k));
+                hud.HideAim();
+                follow.Shake = 0.03f * k;
+                RenderSettings.fogColor = Color.Lerp(fogFrom, new Color(0.16f, 0.1f, 0.08f), k);
+                RenderSettings.ambientSkyColor = Color.Lerp(ambientFrom, new Color(0.3f, 0.24f, 0.2f), k);
+                if (sunlight)
+                {
+                    sunlight.intensity = Mathf.Lerp(sunFrom, sunFrom * 1.8f, k);
+                    sunlight.color = Color.Lerp(sunColourFrom, new Color(1f, 0.7f, 0.45f), k);
+                }
+                if (vaultLight) vaultLight.intensity = 12f * k;
+                if (vaultDoor) vaultDoor.localRotation = Quaternion.Euler(0f, -85f * Mathf.SmoothStep(0f, 1f, k), 0f);
+                if (snow)
+                {
+                    var emission = snow.emission;
+                    emission.rateOverTimeMultiplier = Mathf.Lerp(1f, 0.1f, k);
+                }
+                if (wind) wind.volume = windVolume * (1f - k);
+            });
+            follow.Shake = 0f;
+            yield return new WaitForSeconds(2f);
+            // Spent: it goes dark and falls.
+            yield return Tween(1.5f, k => drone.Brightness = 8f * (1f - k));
+            drone.Brightness = 0.02f;
+            drone.Fallen = true;
+            // Close and low, by where it falls.
+            yield return new WaitForSeconds(1.2f);
+            Vector3 lying = drone.transform.position;
+            Vector3 toSurvivor = Flat(traveller.transform.position - lying);
+            toSurvivor = toSurvivor.sqrMagnitude > 0.01f ? toSurvivor.normalized : Vector3.back;
+            follow.Shot(lying + toSurvivor * 2.2f + Vector3.Cross(Vector3.up, toSurvivor) * 0.8f + Vector3.up * 0.9f, lying + Vector3.up * 0.1f, 1.2f);
+            yield return new WaitForSeconds(3f);
+            // Once, a flicker.
+            yield return Tween(0.5f, k => drone.Brightness = Mathf.Sin(k * Mathf.PI) * 0.8f);
+            drone.Brightness = 0.02f;
+            yield return new WaitForSeconds(2.5f);
+            yield return Tween(2.5f, k => hud.White = k);
+            hud.ShowTitle("THE LAST LIGHT");
+            yield return new WaitForSeconds(5f);
+            hud.HideTitle();
+            yield return new WaitForSeconds(1.5f);
+            hud.ShowSubtitle("the sleepers are waking   [R] begin again");
+        }
+
+        // ---- What the drone is told ----
+
+        /// <summary>Every id the drone may name now, with its place: here, the aim, the survivor, itself, named things near, things it made.</summary>
+        Dictionary<string, Vector3> Ids()
+        {
+            Vector3 survivor = traveller.transform.position;
+            var ids = new Dictionary<string, Vector3>
+            {
+                ["HERE"] = survivor,
+                ["AIM"] = traveller.AimPoint ?? survivor + Flat(follow.View.transform.forward).normalized * 6f,
+                ["ME"] = survivor,
+                ["YOU"] = drone.transform.position,
+                ["NONE"] = survivor,
             };
             foreach (var l in landmarks)
-                if (l && l.Known && !anchors.ContainsKey(l.Id) && Vector3.Distance(l.Point, traveller.transform.position) < 120f) anchors[l.Id] = l.Point;
-            return anchors;
+                if (l && l.Known && !ids.ContainsKey(l.Id) && Vector3.Distance(l.Point, survivor) < 120f) ids[l.Id] = l.Point;
+            foreach (var b in maker.Made)
+                if (b && !ids.ContainsKey(b.Id)) ids[b.Id] = b.Centre;
+            return ids;
         }
 
-        /// <summary>What the mind is told is true now, for the model.</summary>
+        static Vector3 Place(Dictionary<string, Vector3> ids, string id, string fallback) =>
+            id != null && id != "NONE" && ids.TryGetValue(id, out var p) ? p : ids[fallback];
+
+        /// <summary>Where to put a thing meant for a target: on the ground at it, or beside it if it is solid (a case of ice, a door).</summary>
+        Vector3 Beside(Dictionary<string, Vector3> ids, string id)
+        {
+            Vector3 at = Place(ids, id, "AIM");
+            var landmark = landmarks.FirstOrDefault(l => l && l.Id == id);
+            Vector3 survivor = traveller.transform.position;
+            float clear = 0f;
+            if (landmark && landmark.GetComponentInParent<Frozen>()) clear = 1.4f;
+            else if (id == "DOOR" || id == "MIRROR" || id == "SOCKET" || id == "STATION") clear = 2f;
+            else if (id == "AIM" && traveller.AimedIce) clear = 1.4f;
+            if (clear > 0f)
+            {
+                Vector3 away = Flat(survivor - at);
+                at += (away.sqrMagnitude > 0.01f ? away.normalized : Vector3.back) * clear;
+            }
+            if (id == "PLATE" && gate) at = landmark ? landmark.Point : at;
+            return at;
+        }
+
+        string Title(string id)
+        {
+            var landmark = landmarks.FirstOrDefault(l => l && l.Id == id);
+            if (landmark) return landmark.Title;
+            var built = maker.Find(id);
+            if (built) return built.Name;
+            return id == "AIM" ? traveller.AimedBuilt ? traveller.AimedBuilt.Name : traveller.Aimed ? traveller.Aimed.Title : "where you're looking" : id.ToLowerInvariant();
+        }
+
+        float Size(string id)
+        {
+            var landmark = landmarks.FirstOrDefault(l => l && l.Id == id);
+            if (landmark && landmark.TryGetComponent<Collider>(out var c)) return Mathf.Clamp(c.bounds.size.magnitude * 0.4f, 0.8f, 8f);
+            var built = maker.Find(id);
+            return built ? Mathf.Clamp(Bounds(built.transform).size.magnitude * 0.5f, 0.8f, 8f) : 2f;
+        }
+
+        /// <summary>What the drone is told is true now: names, the goal, what is held, the places near with what state they are in, what it made, what was said.</summary>
         string Moment()
         {
             var text = new StringBuilder("\n# The moment\n");
-            text.Append("You hold: ").Append(mind.Holding()).Append(".\n");
-            text.Append("Places (id: what it is, where it is from the traveller):\n");
-            text.Append("- HERE: where the traveller stands.\n");
-            text.Append("- AIM: the point the traveller is looking at: ").Append(AimWords()).Append(".\n");
-            text.Append("- MIND: you, at the traveller's shoulder.\n");
+            text.Append("Your name: ").Append(droneName).Append(". The survivor's name: ").Append(survivorName.Length > 0 ? survivorName : "not told yet").Append(".\n");
+            text.Append("Goal: bring the light back to the vault. Now: ").Append(StageWords()).Append(".\n");
+            text.Append("The survivor holds: ").Append(traveller.Holding ? traveller.Holding.Title + (traveller.Holding.GetComponent<Tool>() ? " (a tool)" : "") + $" ({traveller.Holding.Mass:F0} kg)" : "nothing").Append(". ");
+            text.Append(traveller.Floating ? "They are rising, holding a balloon. " : "");
+            text.Append("\nThings and places (id: what it is; where it is from the survivor):\n");
+            text.Append("- HERE: where the survivor stands").Append(traveller.Grounded ? "" : ", in the air").Append(".\n");
+            text.Append("- AIM: the survivor is looking at ").Append(AimWords()).Append(".\n");
+            text.Append("- ME: the survivor. YOU: you, ").Append(Vector3.Distance(drone.transform.position, traveller.transform.position) < 4f ? "at their shoulder" : Where(drone.transform.position)).Append(".\n");
             foreach (var l in landmarks)
             {
                 if (!l || !l.Known) continue;
                 float d = Vector3.Distance(l.Point, traveller.transform.position);
                 if (d > 120f) continue;
                 text.Append("- ").Append(l.Id).Append(": ").Append(l.Title);
-                if (!string.IsNullOrEmpty(l.About)) text.Append(" (").Append(l.About).Append(')');
+                string about = About(l);
+                if (!string.IsNullOrEmpty(about)) text.Append(" (").Append(about).Append(')');
                 text.Append(", ").Append(Where(l.Point)).Append(".\n");
             }
-            var made = maker.Made.Where(b => b).Select(b => $"{b.Kind.ToLowerInvariant()} of {Matters.Word(b.Matter)}").ToList();
-            text.Append("Made so far: ").Append(made.Count == 0 ? "nothing" : string.Join(", ", made)).Append(".\n");
-            if (idea != null) text.Append("On show now, as your idea: a ").Append(idea.Plan.Summary).Append(".\n");
-            if (pending != null) text.Append("Waiting for matter: a ").Append(pending.Plan.Summary).Append(".\n");
+            foreach (var b in maker.Made)
+            {
+                if (!b) continue;
+                text.Append("- ").Append(b.Id).Append(": ").Append(b.Describe()).Append(", you made it");
+                if (traveller.Holding && traveller.Holding.transform == b.transform) text.Append(", in the survivor's hands");
+                text.Append(", ").Append(Where(b.Centre)).Append(".\n");
+            }
+            if (remembered.Count > 0) text.Append("Remembered: ").Append(string.Join("; ", remembered)).Append(".\n");
+            text.Append("Recent words:").Append(recent.Count == 0 ? " none yet.\n" : "\n");
+            foreach (var (who, words) in recent) text.Append("- ").Append(who).Append(": \"").Append(words).Append("\"\n");
             return text.ToString();
+        }
+
+        /// <summary>A landmark's words, with how it is now.</summary>
+        string About(Landmark l)
+        {
+            string state = l.Id switch
+            {
+                "DOOR" => gate && gate.Open ? "open now: sunk into the ground" : "shut",
+                "PLATE" => gate ? $"{gate.Load:F0} kg on it now; it needs about 250" : "",
+                "ICE_CASE" => heartCase && heartCase.Free ? "melted away" : heartCase && heartCase.Rate > 0.05f ? $"melting, {heartCase.Progress * 100f:F0}% gone" : "solid",
+                "HEART" => heart && socket && socket.Full ? "set in the mirror's socket" : traveller.Holding == heart ? "in the survivor's hands" : heartCase && !heartCase.Free ? "frozen in the ice" : "free",
+                "MIRROR_JOINT" => mirrorJoint && mirrorJoint.Free ? "thawed and free" : mirrorJoint && mirrorJoint.Rate > 0.05f ? $"melting, {mirrorJoint.Progress * 100f:F0}% gone" : "frozen solid",
+                "SOCKET" => socket && socket.Full ? "the heart is in it" : "empty",
+                _ => "",
+            };
+            if (string.IsNullOrEmpty(l.About)) return state;
+            return string.IsNullOrEmpty(state) ? l.About : l.About + "; " + state;
         }
 
         string AimWords()
         {
+            if (traveller.AimedBuilt) return $"{traveller.AimedBuilt.Name} ({traveller.AimedBuilt.Id}, you made it), {Where(traveller.AimPoint ?? traveller.AimedBuilt.Centre)}";
             if (traveller.Aimed) return $"{traveller.Aimed.Title} ({traveller.Aimed.Id}), {Where(traveller.AimPoint ?? traveller.Aimed.Point)}";
             if (traveller.AimPoint.HasValue) return "the ground, " + Where(traveller.AimPoint.Value);
             return "the sky";
@@ -407,6 +812,7 @@ namespace Game
             Vector3 to = point - traveller.transform.position;
             Vector3 flat = Flat(to);
             float distance = flat.magnitude;
+            if (distance < 1.5f && Mathf.Abs(to.y) < 1.5f) return "right here";
             var facing = Quaternion.Euler(0f, follow.Yaw, 0f);
             Vector3 local = Quaternion.Inverse(facing) * flat;
             float angle = Mathf.Atan2(local.x, local.z) * Mathf.Rad2Deg;
@@ -416,142 +822,52 @@ namespace Game
             return $"{distance:F0} m {side}{height}";
         }
 
-        void Taken(Ember ember)
+        /// <summary>Names and facts from a turn, kept for the moments to come.</summary>
+        void Keep(Turn turn)
         {
-            mind.Mark(true);
-            int left = embers.Count(e => e && !e.Gone);
-            hud.Note(left == 0 ? "the last ember" : left == 1 ? "one ember left" : $"{left} embers left", 4f);
-            ShowCarry();
-            if (left == 0 && !ended) StartCoroutine(Finale());
-        }
-
-        /// <summary>Plays the ending at once (tests).</summary>
-        public void End()
-        {
-            if (!ended) StartCoroutine(Finale());
-        }
-
-        /// <summary>
-        /// With the last ember the mind has enough light: it rises over the traveller and grows, space
-        /// bending round it, its warm light turning to the colours of the orb at the beginning. White.
-        /// It asks for its first words; whatever the player writes is kept, and becomes the message
-        /// the orb flashes at the next beginning.
-        /// </summary>
-        IEnumerator Finale()
-        {
-            ended = true;
-            ClearIdea();
-            if (pending != null)
+            if (!string.IsNullOrWhiteSpace(turn.DroneName))
             {
-                maker.Hide(pending);
-                pending = null;
+                droneName = turn.DroneName.Trim().TrimEnd('.', '!');
+                say.Placeholder = "say something to " + droneName;
             }
-            yield return new WaitForSeconds(2f);
-            traveller.Scripted = true;
-            hud.HideHint();
-            hud.HideAim();
-            float from = music ? music.volume : 0f;
-            yield return Tween(3f, k => { if (music) music.volume = from * (1f - k); });
-            if (music && finaleClip)
+            if (!string.IsNullOrWhiteSpace(turn.SurvivorName)) survivorName = turn.SurvivorName.Trim().TrimEnd('.', '!');
+            if (!string.IsNullOrWhiteSpace(turn.Remember) && !remembered.Contains(turn.Remember))
             {
-                music.clip = finaleClip;
-                music.volume = 0.55f;
-                music.Play();
-            }
-            if (holeWarp) holeWarp.enabled = false;
-            if (mindWarp) mindWarp.enabled = true;
-            follow.Face(traveller.Body.eulerAngles.y, -14f);
-            for (float t = 0f; t < 16f; t += Time.deltaTime)
-            {
-                float k = t / 16f;
-                mind.Ascent = k * k * (3f - 2f * k);
-                if (mindWarp)
-                {
-                    mindWarp.CoreRadius = Mathf.Lerp(0.1f, 0.9f, k);
-                    mindWarp.Strength = Mathf.Lerp(0.3f, 1.8f, k);
-                    mindWarp.Twist = 1f + 2f * k;
-                }
-                follow.Shake = k * k * 0.05f;
-                if (ambience) ambience.volume = ambienceVolume * (1f - k);
-                if (wind) wind.volume = windVolume * (1f - k);
-                yield return null;
-            }
-            yield return Tween(1.2f, k => hud.White = k);
-            if (music) music.Stop();
-            follow.Shake = 0f;
-            yield return new WaitForSeconds(1.5f);
-            hud.ShowTitle("IT ASKS FOR ITS FIRST WORDS");
-            yield return new WaitForSeconds(2.5f);
-            string given = null;
-            void Got(string w) => given = Letters(w).Length > 0 ? w : null;
-            say.Said += Got;
-            say.Placeholder = "give it its first words";
-            while (given == null)
-            {
-                if (!say.IsOpen) say.Open();
-                yield return null;
-            }
-            say.Said -= Got;
-            hud.HideTitle();
-            string message = Letters(given);
-            PlayerPrefs.SetString(MorseEmitter.FirstWordsKey, message);
-            PlayerPrefs.Save();
-            Log(given, false, "first words: " + message, 0f, "rules");
-            yield return new WaitForSeconds(1.5f);
-            hud.ShowTitle(message);
-            yield return new WaitForSeconds(4f);
-            hud.HideTitle();
-            yield return new WaitForSeconds(1.5f);
-            yield return Tween(2f, k => hud.Black = k);
-            SceneManager.LoadScene(0);
-        }
-
-        /// <summary>The words as the orb can flash them: capital letters, at most four words and 24 letters.</summary>
-        static string Letters(string words)
-        {
-            var kept = new List<string>();
-            int letters = 0;
-            foreach (string word in words.ToUpperInvariant().Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries))
-            {
-                string w = new string(word.Where(c => c >= 'A' && c <= 'Z').ToArray());
-                if (w.Length == 0) continue;
-                if (kept.Count == 4 || letters + w.Length > 24) break;
-                kept.Add(w);
-                letters += w.Length;
-            }
-            return string.Join(" ", kept);
-        }
-
-        /// <summary>When the player has said nothing for a while, the mind shows an idea of its own.</summary>
-        IEnumerator Ideas()
-        {
-            while (!arrived) yield return null;
-            while (true)
-            {
-                yield return null;
-                if (handling || maker.Busy || idea != null || pending != null || say.IsOpen || talk.Listening) { quietSince = Time.time; continue; }
-                if (Time.time - quietSince < ideaAfter) continue;
-                quietSince = Time.time;
-                if (!firstIdeaTo || !firstIdeaTo.Known || maker.Made.Any(b => b && b.Kind == "BRIDGE")) continue;
-                var plan = maker.Design(new Maker.Request
-                {
-                    Kind = "BRIDGE",
-                    Matter = Matter.Stone,
-                    From = traveller.transform.position,
-                    To = firstIdeaTo.Point,
-                    Size = 1f,
-                }, out _);
-                if (plan == null) continue;
-                ShowIdea(plan, "(its own idea)");
-                hud.ShowHint("[Q] or [Tab]   tell it \"do it\", or ask for something else");
-                StartCoroutine(HideHintLater(8f));
+                remembered.Add(turn.Remember);
+                if (remembered.Count > 8) remembered.RemoveAt(0);
             }
         }
 
-        void ShowCarry()
+        void Remember(string who, string words)
         {
-            var parts = Matters.All.Where(m => mind.Count(m) > 0 || m == Matter.Light).Select(m => $"{Matters.Word(m)} {mind.Count(m)}");
-            hud.Carry(string.Join("     ", parts));
+            if (string.IsNullOrWhiteSpace(words)) return;
+            recent.Add((who, words));
+            if (recent.Count > 8) recent.RemoveAt(0);
+        }
+
+        // ---- Small things ----
+
+        static Bounds Bounds(Transform thing)
+        {
+            var renderers = thing.GetComponentsInChildren<Renderer>();
+            if (renderers.Length == 0) return new Bounds(thing.position, Vector3.one);
+            var b = renderers[0].bounds;
+            foreach (var r in renderers) b.Encapsulate(r.bounds);
+            return b;
+        }
+
+        float Yaw(Vector3 point)
+        {
+            Vector3 to = Flat(point - traveller.transform.position);
+            return to.sqrMagnitude < 0.01f ? follow.Yaw : Mathf.Atan2(to.x, to.z) * Mathf.Rad2Deg;
+        }
+
+        static string Sentence(string words)
+        {
+            words = words.Trim();
+            if (words.Length == 0) return words;
+            words = char.ToUpperInvariant(words[0]) + words.Substring(1);
+            return words.EndsWith(".") || words.EndsWith("!") || words.EndsWith("?") ? words : words + ".";
         }
 
         AudioClip Footstep()
@@ -560,7 +876,8 @@ namespace Game
             if (Physics.Raycast(traveller.transform.position + Vector3.up * 0.3f, Vector3.down, out var hit, 1f, ~0, QueryTriggerInteraction.Ignore))
             {
                 var built = hit.collider.GetComponentInParent<Built>();
-                if (built) set = built.Matter == Matter.Ice ? iceSteps : stoneSteps;
+                if (built) set = built.Look == "ICE" || built.Look == "GLASS" ? iceSteps : stoneSteps;
+                else if (hit.collider.GetComponentInParent<Gate>() || hit.collider.name.Contains("Wall") || hit.collider.name.Contains("Floor")) set = stoneSteps;
             }
             if (set == null || set.Length == 0) set = snowSteps;
             return set != null && set.Length > 0 ? set[random.Next(set.Length)] : null;
@@ -569,21 +886,8 @@ namespace Game
         void Step(AudioClip clip, float volume)
         {
             if (!steps || !clip) return;
-            // A little different every time: pitch by 3 per cent, volume by 1.5 dB.
             steps.pitch = 1f + ((float)random.NextDouble() - 0.5f) * 0.06f;
             steps.PlayOneShot(clip, volume * (0.84f + 0.32f * (float)random.NextDouble()));
-        }
-
-        IEnumerator StopAttending(float seconds)
-        {
-            yield return new WaitForSeconds(seconds);
-            mind.Attending = null;
-        }
-
-        IEnumerator HideHintLater(float seconds)
-        {
-            yield return new WaitForSeconds(seconds);
-            hud.HideHint();
         }
 
         static IEnumerator Tween(float seconds, Action<float> set)
@@ -598,14 +902,6 @@ namespace Game
 
         static Vector3 Flat(Vector3 v) => new Vector3(v.x, 0f, v.z);
 
-        static string Clean(string words)
-        {
-            var text = new StringBuilder();
-            foreach (char c in words.ToLowerInvariant())
-                if (char.IsLetter(c) || c == ' ') text.Append(c);
-            return text.ToString().Trim();
-        }
-
         void Log(string words, bool spoken, string read, float seconds, string source)
         {
             try
@@ -613,7 +909,7 @@ namespace Game
                 string line = "{\"time\":" + MetaApi.Quote(DateTime.UtcNow.ToString("o")) + ",\"words\":" + MetaApi.Quote(words) +
                               ",\"spoken\":" + (spoken ? "true" : "false") + ",\"read\":" + MetaApi.Quote(read) +
                               ",\"seconds\":" + seconds.ToString("F2", System.Globalization.CultureInfo.InvariantCulture) + ",\"source\":" + MetaApi.Quote(source) +
-                              ",\"holding\":" + MetaApi.Quote(mind.Holding()) + "}";
+                              ",\"stage\":" + MetaApi.Quote(stage.ToString()) + "}";
                 File.AppendAllText(logPath, line + "\n");
             }
             catch (IOException) { }

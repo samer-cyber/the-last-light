@@ -13,9 +13,9 @@ namespace Game
         [SerializeField] UIDocument document;
         [SerializeField] StyleSheet style;
 
-        VisualElement layer, hint, white, subtitle, black, listen, listenLevel, aim, aimDot;
-        Label title, listenWords, said, note, aimWords, aimAction, carry;
-        IVisualElementScheduledItem saidFade, noteFade;
+        VisualElement layer, hint, white, subtitle, black, listen, listenLevel, aim, aimDot, voice, photo, photoImage, goal;
+        Label title, card, listenWords, said, note, aimWords, aimAction, carry, voiceName, voiceWords, photoCaption, goalTitle, goalStep;
+        IVisualElementScheduledItem saidFade, noteFade, voiceFade, photoFade;
 
         public float Black
         {
@@ -61,6 +61,20 @@ namespace Game
         {
             Build();
             title.RemoveFromClassList("hud__title--shown");
+        }
+
+        /// <summary>White words on the black, before the world fades in.</summary>
+        public void ShowCard(string text)
+        {
+            Build();
+            card.text = text;
+            card.AddToClassList("hud__card--shown");
+        }
+
+        public void HideCard()
+        {
+            Build();
+            card.RemoveFromClassList("hud__card--shown");
         }
 
         public void ShowSubtitle(string text)
@@ -120,6 +134,55 @@ namespace Game
             carry.text = text;
         }
 
+        /// <summary>
+        /// The drone's words under the view, its name before them, typed out as far as
+        /// <paramref name="shown"/> (0 to 1) while it chirps them.
+        /// </summary>
+        public void Voice(string name, string line, float shown)
+        {
+            Build();
+            voiceFade?.Pause();
+            voiceName.text = (name ?? "").ToUpperInvariant();
+            int letters = Mathf.Clamp(Mathf.CeilToInt(line.Length * shown), 0, line.Length);
+            // The rest is laid out but clear, so the line does not jump as it is typed.
+            voiceWords.text = line.Substring(0, letters) + "<alpha=#00>" + line.Substring(letters);
+            voice.AddToClassList("hud__voice--shown");
+        }
+
+        public void VoiceFade(float seconds)
+        {
+            Build();
+            voiceFade?.Pause();
+            voiceFade = voice.schedule.Execute(() => voice.RemoveFromClassList("hud__voice--shown")).StartingIn((long)(seconds * 1000f));
+        }
+
+        /// <summary>A picture the drone's eye took, framed in the corner, with a few words under it.</summary>
+        public void Photo(Texture2D picture, string caption, float seconds = 9f)
+        {
+            Build();
+            photoImage.style.backgroundImage = new StyleBackground(picture);
+            photoImage.MarkDirtyRepaint();
+            photoCaption.text = caption ?? "";
+            photo.RemoveFromClassList("hud__photo--shown");
+            photo.AddToClassList("hud__photo--flash");
+            photo.schedule.Execute(() =>
+            {
+                photo.RemoveFromClassList("hud__photo--flash");
+                photo.AddToClassList("hud__photo--shown");
+            }).StartingIn(120);
+            photoFade?.Pause();
+            photoFade = photo.schedule.Execute(() => photo.RemoveFromClassList("hud__photo--shown")).StartingIn((long)(seconds * 1000f));
+        }
+
+        /// <summary>What the survivor is doing: the goal, and the step now. Empty hides it.</summary>
+        public void Goal(string title, string step)
+        {
+            Build();
+            goalTitle.text = (title ?? "").ToUpperInvariant();
+            goalStep.text = step ?? "";
+            goal.EnableInClassList("hud__goal--shown", !string.IsNullOrEmpty(title));
+        }
+
         /// <summary>The player's own words, as they were heard, for a few seconds.</summary>
         public void Said(string text, float seconds = 5f) => Flash(said, "hud__said--shown", "“" + text + "”", seconds, ref saidFade);
 
@@ -171,12 +234,35 @@ namespace Game
             carry = new Label { pickingMode = PickingMode.Ignore };
             carry.AddToClassList("hud__carry");
             layer.Add(carry);
+            goal = Element("hud__goal");
+            goalTitle = new Label { pickingMode = PickingMode.Ignore };
+            goalTitle.AddToClassList("hud__goal-title");
+            goal.Add(goalTitle);
+            goalStep = new Label { pickingMode = PickingMode.Ignore };
+            goalStep.AddToClassList("hud__goal-step");
+            goal.Add(goalStep);
+            photo = Element("hud__photo");
+            photoImage = Part("hud__photo-image");
+            photo.Add(photoImage);
+            photoCaption = new Label { pickingMode = PickingMode.Ignore };
+            photoCaption.AddToClassList("hud__photo-caption");
+            photo.Add(photoCaption);
+            voice = Element("hud__voice");
+            voiceName = new Label { pickingMode = PickingMode.Ignore };
+            voiceName.AddToClassList("hud__voice-name");
+            voice.Add(voiceName);
+            voiceWords = new Label { pickingMode = PickingMode.Ignore, enableRichText = true };
+            voiceWords.AddToClassList("hud__voice-words");
+            voice.Add(voiceWords);
             white = Element("hud__white");
             title = new Label { pickingMode = PickingMode.Ignore };
             title.AddToClassList("hud__title");
             layer.Add(title);
             subtitle = Element("hud__subtitle");
             black = Element("hud__black");
+            card = new Label { pickingMode = PickingMode.Ignore };
+            card.AddToClassList("hud__card");
+            layer.Add(card);
             root.Add(layer);
         }
 

@@ -73,8 +73,13 @@ namespace Game
             // Arms against the legs; bent more when running; one reaches out when gathering.
             float reach = Mathf.Clamp01(1f - (Time.time - traveller.ReachedAt) / 0.7f);
             reach = Mathf.Sin(reach * Mathf.PI);
-            Arm(left, -s * armSwing, run, air, 0f);
-            Arm(right, s * armSwing, run, air, reach);
+            // Something carried in both hands holds both arms out in front; a tool rides in the
+            // right hand and swings with each blow; a balloon's cord pulls the right arm up.
+            var held = traveller.Holding;
+            int both = held && !held.OneHand ? 1 : 0;
+            int pose = held && held.OneHand ? traveller.Floating ? 3 : 2 : both;
+            Arm(left, both == 1 ? 0f : -s * armSwing, run, air, 0f, both);
+            Arm(right, pose != 0 ? 0f : s * armSwing, run, air, reach, pose);
 
             // Body: a bob twice a step, a lean into speed, a dip on landing, breathing when still.
             landDip = Mathf.MoveTowards(landDip, 0f, dt * 0.5f);
@@ -87,7 +92,7 @@ namespace Game
             chest.localRotation = Quaternion.Euler(lean * 0.5f + still * Mathf.Sin(breath * 1.6f) * 1.6f, -s * 6f * moving, 0f);
 
             // The head turns toward what the traveller looks at, within a neck's reach.
-            Vector3 lookPoint = traveller.AimPoint ?? (lookAt ? lookAt.position : head.position + transform.forward);
+            Vector3 lookPoint = traveller.Attending ?? traveller.AimPoint ?? (lookAt ? lookAt.position : head.position + transform.forward);
             Vector3 toLook = (lookPoint - head.position).normalized;
             Vector3 local = transform.InverseTransformDirection(toLook);
             float yaw = Mathf.Clamp(Mathf.Atan2(local.x, local.z) * Mathf.Rad2Deg, -60f, 60f);
@@ -117,15 +122,34 @@ namespace Game
             side.foot.localRotation = Quaternion.Euler(thigh * 0.6f - knee * 0.55f - dip * 0.5f, 0f, 0f);
         }
 
-        void Arm(Side side, float swing, float run, bool air, float reach)
+        void Arm(Side side, float swing, float run, bool air, float reach, int pose)
         {
             bool isLeft = side.upperArm == left.upperArm;
             float outward = isLeft ? -1f : 1f;
-            float lift = air ? 30f : 0f;
+            float lift = air && pose == 0 ? 30f : 0f;
             var arm = Quaternion.Euler(-swing - lift, 0f, outward * (8f + lift * 0.4f));
+            float elbow = Mathf.Lerp(14f, 70f, run) + (air ? 30f : 0f);
+            switch (pose)
+            {
+                case 1:
+                    // Carrying in front, both hands under it.
+                    arm = Quaternion.Euler(-48f, outward * -10f, outward * 6f);
+                    elbow = 62f;
+                    break;
+                case 2:
+                    // A tool in hand, raised for a blow and brought down when one is struck.
+                    arm = Quaternion.Euler(Mathf.Lerp(-40f, -125f, reach), 0f, outward * 10f);
+                    elbow = Mathf.Lerp(48f, 10f, reach);
+                    reach = 0f;
+                    break;
+                case 3:
+                    // Hanging from a balloon's cord.
+                    arm = Quaternion.Euler(-172f, 0f, outward * 8f);
+                    elbow = 4f;
+                    break;
+            }
             if (reach > 0f) arm = Quaternion.Slerp(arm, Quaternion.Euler(-70f, outward * -15f, outward * 10f), reach);
             side.upperArm.localRotation = arm;
-            float elbow = Mathf.Lerp(14f, 70f, run) + (air ? 30f : 0f);
             side.forearm.localRotation = Quaternion.Euler(-Mathf.Lerp(elbow, 6f, reach), 0f, 0f);
         }
     }

@@ -43,3 +43,6 @@ Thumbs.db
 *.unitypackage
 *.app
 crashlytics-build.properties
+
+# Written by the Performance Testing package during builds
+/Assets/Resources/PerformanceTestRun*

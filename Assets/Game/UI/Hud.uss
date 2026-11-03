@@ -242,3 +242,131 @@
     color: rgba(225, 218, 205, 0.7);
     text-shadow: 0 1px 8px rgba(0, 0, 0, 0.95);
 }
+
+
+/* The drone's words under the view, its name small before them. */
+
+.hud__voice {
+    position: absolute;
+    left: 14%;
+    right: 14%;
+    bottom: 128px;
+    flex-direction: column;
+    align-items: center;
+    opacity: 0;
+    transition-property: opacity;
+    transition-duration: 0.5s;
+}
+
+.hud__voice--shown {
+    opacity: 1;
+}
+
+.hud__voice-name {
+    font-size: 15px;
+    letter-spacing: 6px;
+    color: rgba(255, 186, 120, 0.9);
+    margin-bottom: 6px;
+    text-shadow: 0 1px 8px rgba(0, 0, 0, 0.9);
+}
+
+.hud__voice-words {
+    font-size: 30px;
+    color: rgba(250, 244, 236, 0.97);
+    white-space: normal;
+    -unity-text-align: upper-center;
+    text-shadow: 0 2px 12px rgba(0, 0, 0, 0.95);
+}
+
+/* What the drone's eye saw, framed in the corner. */
+
+.hud__photo {
+    position: absolute;
+    right: 36px;
+    top: 34px;
+    width: 400px;
+    padding: 8px 8px 10px 8px;
+    background-color: rgba(10, 10, 14, 0.6);
+    border-width: 1px;
+    border-color: rgba(255, 196, 140, 0.55);
+    border-radius: 4px;
+    opacity: 0;
+    translate: 24px 0;
+    transition-property: opacity, translate;
+    transition-duration: 0.6s, 0.6s;
+}
+
+.hud__photo--flash {
+    opacity: 1;
+    translate: 0 0;
+    background-color: rgba(255, 255, 255, 0.95);
+    transition-duration: 0.05s, 0.05s;
+}
+
+.hud__photo--shown {
+    opacity: 1;
+    translate: 0 0;
+}
+
+.hud__photo-image {
+    width: 384px;
+    height: 216px;
+    -unity-background-scale-mode: scale-and-crop;
+}
+
+.hud__photo-caption {
+    margin-top: 6px;
+    font-size: 14px;
+    letter-spacing: 3px;
+    color: rgba(255, 196, 140, 0.9);
+}
+
+/* The goal and the step now, small in the top left. */
+
+.hud__goal {
+    position: absolute;
+    left: 40px;
+    top: 34px;
+    opacity: 0;
+    transition-property: opacity;
+    transition-duration: 1.5s;
+}
+
+.hud__goal--shown {
+    opacity: 1;
+}
+
+.hud__goal-title {
+    font-size: 14px;
+    letter-spacing: 5px;
+    color: rgba(255, 196, 140, 0.85);
+    text-shadow: 0 1px 8px rgba(0, 0, 0, 0.9);
+}
+
+.hud__goal-step {
+    margin-top: 4px;
+    font-size: 21px;
+    color: rgba(236, 238, 250, 0.92);
+    text-shadow: 0 1px 8px rgba(0, 0, 0, 0.9);
+}
+
+/* White words on the black before the world fades in. */
+
+.hud__card {
+    position: absolute;
+    left: 10%;
+    right: 10%;
+    top: 40%;
+    font-size: 26px;
+    letter-spacing: 9px;
+    color: rgba(236, 232, 226, 0.92);
+    white-space: normal;
+    -unity-text-align: middle-center;
+    opacity: 0;
+    transition-property: opacity;
+    transition-duration: 1.2s;
+}
+
+.hud__card--shown {
+    opacity: 1;
+}

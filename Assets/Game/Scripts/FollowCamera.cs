@@ -33,6 +33,8 @@ namespace Game
         public float Shake { get; set; }
 
         float yaw, pitch, targetYaw, targetPitch, zoom, wantZoom, settle;
+        Vector3? shotFrom, shotAt;
+        float shotEase = 1.5f;
         Vector3 pivot;
         bool wasLocked;
 
@@ -45,6 +47,23 @@ namespace Game
             Lock(true);
         }
 
+        /// <summary>
+        /// A shot of its own for a scripted moment: the camera glides to a place and looks at a point
+        /// until <see cref="EndShot"/>. Ease is how quickly it gets there (higher is quicker).
+        /// </summary>
+        public void Shot(Vector3 from, Vector3 at, float ease = 1.5f)
+        {
+            shotFrom = from;
+            shotAt = at;
+            shotEase = ease;
+        }
+
+        public void EndShot()
+        {
+            shotFrom = null;
+            shotAt = null;
+        }
+
         /// <summary>Turns the camera to look the way given, at once.</summary>
         public void Face(float newYaw, float newPitch)
         {
@@ -55,6 +74,19 @@ namespace Game
         void LateUpdate()
         {
             float dt = Time.deltaTime;
+            if (shotFrom.HasValue)
+            {
+                float glide = 1f - Mathf.Exp(-shotEase * dt);
+                Vector3 at = Vector3.Lerp(transform.position, shotFrom.Value, glide);
+                var look = Quaternion.LookRotation(shotAt.Value - at, Vector3.up);
+                if (Shake > 0f)
+                {
+                    at += Random.insideUnitSphere * Shake;
+                    Shake = Mathf.MoveTowards(Shake, 0f, dt * 0.8f);
+                }
+                transform.SetPositionAndRotation(at, Quaternion.Slerp(transform.rotation, look, glide * 1.5f));
+                return;
+            }
             var mouse = Mouse.current;
             var keys = Keyboard.current;
             bool locked = Cursor.lockState == CursorLockMode.Locked;
