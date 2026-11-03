@@ -122,8 +122,8 @@ namespace Game
         {
             if (once && told.Contains("bark " + key)) return;
             if (!Barks.TryGetValue(key, out var b)) return;
-            // Quick lines go straight out, not behind a thought in progress; but one at a time.
-            if (barking || drone.Speaking) return;
+            // Quick lines go straight out, not behind a thought in progress; never over another line.
+            if (barking || drone.Busy) return;
             told.Add("bark " + key);
             StartCoroutine(Barking(b.line, b.mood));
         }
@@ -133,7 +133,7 @@ namespace Game
         IEnumerator Barking(string line, string mood)
         {
             barking = true;
-            yield return Speak(line, mood);
+            yield return Speak(line, mood, true);
             barking = false;
         }
 
@@ -1015,10 +1015,10 @@ namespace Game
             yield return drone.Speak(idea.Say, idea.Mood, hud, droneName);
         }
 
-        IEnumerator Speak(string words, string mood)
+        IEnumerator Speak(string words, string mood, bool quick = false)
         {
             Remember("you", words);
-            yield return drone.Speak(words, mood, hud, droneName);
+            yield return drone.Speak(words, mood, hud, droneName, quick);
         }
 
         // ---- The end ----

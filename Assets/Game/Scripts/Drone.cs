@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace Game
@@ -41,6 +42,10 @@ namespace Game
         public float Level { get; set; }
         public bool Thinking { get; set; }
         public bool Speaking => speakingUntil > Time.time;
+        /// <summary>The line it is saying now, or null.</summary>
+        public string Saying { get; private set; }
+        /// <summary>A line is being fetched or said, or one waits its turn: a quick line now would be dropped.</summary>
+        public bool Busy => heldUntil > Time.time || First() != int.MaxValue;
         /// <summary>Its light, 1 normally; the ending burns it high, then out.</summary>
         public float Brightness { get; set; } = 1f;
         /// <summary>Its eye's colour; warm unless changed.</summary>
@@ -52,7 +57,10 @@ namespace Game
         public bool Fallen { get; set; }
 
         Vector3 velocity, glowScale;
-        float think, open = 1f, speakingUntil, gestureAt = -10f, chirp, speakStart, moodUntil;
+        float think, open = 1f, speakingUntil, gestureAt = -10f, chirp, speakStart, moodUntil, heldUntil;
+        int tickets;
+        // Lines waiting for the voice, by ticket, with when each was last seen waiting.
+        readonly Dictionary<int, float> waiting = new Dictionary<int, float>();
         float[] envelope;
         string gesture = "", mood = "CALM";
         Color moodColour;
@@ -266,10 +274,25 @@ namespace Game
             }
         }
 
-        /// <summary>Says a line: chirps from its shell and the words under the view, typed as it goes.</summary>
-        public IEnumerator Speak(string line, string mood, Hud hud, string name)
+        /// <summary>
+        /// Says a line: its voice from the shell and the words under the view, typed as it goes. One line at a
+        /// time, so it never talks over itself: a line waits while another is fetched or said, and a quick one
+        /// (said in the moment, like a warning) is dropped instead of waiting.
+        /// </summary>
+        public IEnumerator Speak(string line, string mood, Hud hud, string name, bool quick = false)
         {
-            if (string.IsNullOrWhiteSpace(line)) yield break;
+            if (string.IsNullOrWhiteSpace(line) || quick && Busy) yield break;
+            // In turn: the earliest line still waiting goes next (one whose coroutine was stopped is passed over).
+            int ticket = ++tickets;
+            waiting[ticket] = Time.time;
+            while (heldUntil > Time.time || First() != ticket)
+            {
+                waiting[ticket] = Time.time;
+                yield return null;
+            }
+            waiting.Remove(ticket);
+            // Held while the voice is fetched (that gives up after 8 s), then until the line has been said.
+            heldUntil = Time.time + 12f;
             AudioClip clip = null;
             if (spoken) yield return SparkVoice.Clip(line, mood, 8f, c => clip = c);
             bool chirps = !clip;
@@ -282,15 +305,28 @@ namespace Game
                 voice.pitch = 1f;
                 voice.PlayOneShot(clip, chirps ? 0.75f : voiceVolume);
             }
+            Saying = line;
             speakStart = Time.time;
             speakingUntil = Time.time + seconds;
+            // A breath before the next line.
+            heldUntil = speakingUntil + 0.4f;
             for (float t = 0f; t < seconds; t += Time.deltaTime)
             {
                 hud.Voice(name, line, Mathf.Clamp01(t / (seconds * 0.9f)));
                 yield return null;
             }
+            Saying = null;
             hud.Voice(name, line, 1f);
             hud.VoiceFade(2.2f + line.Length * 0.03f);
+        }
+
+        /// <summary>The earliest line still waiting for the voice, or int.MaxValue if none.</summary>
+        int First()
+        {
+            int first = int.MaxValue;
+            foreach (var w in waiting)
+                if (Time.time - w.Value < 1f && w.Key < first) first = w.Key;
+            return first;
         }
 
         /// <summary>A short sound for listening, or for having heard.</summary>
