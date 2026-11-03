@@ -10,15 +10,16 @@ using UnityEngine.Networking;
 namespace Game
 {
     /// <summary>
-    /// Spark's spoken voice: each line read aloud by ElevenLabs (the library voice Eva, a small robot
-    /// helper), its steadiness and pace set by the mood. Lines are kept in memory and on disk, so a line
-    /// said before (the story's own lines, warnings) plays at once. Without a key or a connection the
-    /// caller falls back to chirps. The key comes from <see cref="Secrets"/>; it is never logged.
+    /// Spark's spoken voice: each line read aloud by ElevenLabs (Samer's designed voice "Game robot voice",
+    /// a robotic, conversational cyborg, a little joyful and silly), its steadiness and pace set by the
+    /// mood. Lines are kept in memory and on disk, so a line said before (the story's own lines, warnings)
+    /// plays at once. Without a key or a connection the caller falls back to chirps. The key comes from
+    /// <see cref="Secrets"/>; it is never logged.
     /// </summary>
     public static class SparkVoice
     {
         const string KeyName = "ELEVENLABS_API_KEY";
-        const string Voice = "weA4Q36twV5kwSaTEL0Q";
+        const string Voice = "1AVDZUKrjr2dXegY7zF8";
         const string Model = "eleven_turbo_v2_5";
         public const int Rate = 24000;
 

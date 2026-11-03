@@ -28,7 +28,7 @@ namespace Game
         [SerializeField] AudioSource voice;
         [SerializeField] AudioClip moveClip;
         [SerializeField, Tooltip("Speaks in words (ElevenLabs) rather than chirps, when it can.")] bool spoken = true;
-        [SerializeField, Range(0f, 1f)] float voiceVolume = 0.9f;
+        [SerializeField, Range(0f, 1f), Tooltip("Its lines peak at full scale: this keeps them clear of clipping, and above the footsteps.")] float voiceVolume = 0.65f;
         [SerializeField, Tooltip("Snow flung off the shell when it shakes.")] ParticleSystem snowOff;
         [SerializeField] Vector3 offset = new Vector3(0.8f, 1.95f, -0.2f);
         [SerializeField] Color warm = new Color(1f, 0.62f, 0.25f);
