@@ -20,13 +20,11 @@ namespace Game.Building
     /// mirror on the clifftop, the maker, the mind, the voice and the director, all wired together.
     /// Running it again replaces the scene.
     /// </summary>
-    public static class LastLightSceneBuilder
+    public static partial class LastLightSceneBuilder
     {
         const string ScenePath = Root + "/Scenes/LastLight.unity";
         static readonly Vector3 SunDirection = new Vector3(-0.38f, 0.16f, 0.91f).normalized;
         static readonly Vector3 HoleDirection = new Vector3(0.55f, 0.52f, 0.65f).normalized;
-        const float ChasmNear = 0f, ChasmFar = 12f;
-        static readonly Vector3 Start = new Vector3(0f, 0f, -17f);
 
         [MenuItem("Game/Build Last Light Scene")]
         public static void Build()
@@ -50,7 +48,11 @@ namespace Game.Building
 
             // ---- Materials ----
             var sky = MakeMaterial("Dying Sky", "Game/DyingSky", m => m.SetVector("_SunDirection", SunDirection));
-            var groundMaterial = MakeMaterial("Frozen Ground", "Game/Ground");
+            var groundMaterial = MakeMaterial("Frozen Ground", "Game/Ground", m =>
+            {
+                m.SetColor("_Snow", new Color(0.8f, 0.83f, 0.9f));
+                m.SetColor("_SnowShade", new Color(0.55f, 0.6f, 0.74f));
+            });
             var stone = MakeMatter("Matter Stone", new Color(0.5f, 0.48f, 0.47f), new Color(0.33f, 0.32f, 0.33f), 0.18f, 0f, new Color(0.55f, 0.54f, 0.52f), Color.black, Color.black);
             var ice = MakeMatter("Matter Ice", new Color(0.42f, 0.6f, 0.72f), new Color(0.28f, 0.44f, 0.58f), 0.9f, 0f, new Color(0.75f, 0.88f, 0.95f), new Color(0.12f, 0.3f, 0.45f), Color.black);
             var metal = MakeMatter("Matter Metal", new Color(0.3f, 0.29f, 0.3f), new Color(0.16f, 0.15f, 0.17f), 0.62f, 0.85f, new Color(0.62f, 0.58f, 0.52f), Color.black, Color.black);
@@ -132,13 +134,13 @@ namespace Game.Building
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             RenderSettings.skybox = sky;
             RenderSettings.ambientMode = AmbientMode.Trilight;
-            RenderSettings.ambientSkyColor = new Color(0.11f, 0.115f, 0.16f);
-            RenderSettings.ambientEquatorColor = new Color(0.12f, 0.08f, 0.08f);
-            RenderSettings.ambientGroundColor = new Color(0.045f, 0.045f, 0.06f);
+            RenderSettings.ambientSkyColor = new Color(0.2f, 0.2f, 0.27f);
+            RenderSettings.ambientEquatorColor = new Color(0.2f, 0.12f, 0.1f);
+            RenderSettings.ambientGroundColor = new Color(0.08f, 0.08f, 0.1f);
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.Exponential;
-            RenderSettings.fogColor = new Color(0.032f, 0.032f, 0.045f);
-            RenderSettings.fogDensity = 0.011f;
+            RenderSettings.fogColor = new Color(0.085f, 0.05f, 0.05f);
+            RenderSettings.fogDensity = 0.0032f;
             int travellerLayer = EnsureLayer("Traveller");
             int droneLayer = EnsureLayer("Drone");
             int notPicked = ~(1 << travellerLayer) & ~(1 << droneLayer) & ~(1 << 2);
@@ -152,18 +154,13 @@ namespace Game.Building
             sunlight.type = LightType.Directional;
             sunlight.transform.rotation = Quaternion.LookRotation(-SunDirection);
             sunlight.color = new Color(1f, 0.42f, 0.24f);
-            sunlight.intensity = 1.7f;
+            sunlight.intensity = 2.5f;
             sunlight.shadows = LightShadows.Soft;
             sunlight.shadowStrength = 0.85f;
             RenderSettings.sun = sunlight;
 
-            // The dark thing in the sky that bends the stars: what the great minds made of the Moon.
-            var holeObject = new GameObject("Black Hole");
-            holeObject.transform.position = HoleDirection * 3000f;
-            holeObject.transform.rotation = Quaternion.LookRotation(HoleDirection) * Quaternion.Euler(76f, 0f, 18f);
-            MakePart("Horizon", holeObject.transform, sphere, black, 150f);
-            var discRenderer = MakePart("Disc", holeObject.transform, disc, accretion, 520f);
-            discRenderer.transform.localRotation = Quaternion.identity;
+            // The Lattice: the great minds' black net round the sun.
+            MakeLattice(quad, SunDirection);
 
             // The ground.
             var groundObject = new GameObject("Ground");
@@ -211,11 +208,6 @@ namespace Game.Building
             var follow = cameraObject.AddComponent<FollowCamera>();
             Wire(follow, ("view", camera), ("target", travellerObject.transform));
             SetMask(follow, "solid", notPicked);
-            var warp = holeObject.AddComponent<SpaceWarp>();
-            Wire(warp, ("view", camera));
-            SetValue(warp, "ring", 3.2f);
-            SetValue(warp, "swirl", 0.12f);
-            SetValue(warp, "near", 400f);
 
             // Snow, drifting past the camera all the time.
             var snow = MakeParticles("Snow", cameraObject.transform, snowMaterial);
@@ -273,23 +265,42 @@ namespace Game.Building
             var world = new GameObject("World").transform;
             var (vaultLight, vaultDoor) = MakeVault(world, cube, cylinder, concrete, metal, warmWindow, groundMaterial, landmarks);
 
-            // The chasm and the far side.
-            landmarks.Add(MakeLandmark("Chasm", world, new Vector3(0f, (startY - 1.5f - 46f) * 0.5f, (ChasmNear + ChasmFar) * 0.5f), "CHASM", "the chasm",
-                $"{ChasmFar - ChasmNear:F0} m wide and 40 m deep; nothing crosses it", new Vector3(60f, startY - 1.5f + 46f, ChasmFar - ChasmNear - 0.6f)));
-            float farY = Height(0f, ChasmFar + 4f);
-            var farSide = MakeLandmark("Far Side", world, new Vector3(0f, farY, ChasmFar + 4f), "FAR_SIDE", "the far side", "the ground across the chasm", Vector3.zero);
+            // The frozen town.
+            var snowCover = MakeLit("Snow Cover", new Color(0.78f, 0.8f, 0.86f), 0.25f, 0f);
+            var roofMetal = MakeLit("Roof Metal", new Color(0.16f, 0.14f, 0.14f), 0.35f, 0.6f);
+            var posterTexture = Load<Texture2D>($"{Root}/Textures/Lumen Poster.jpg") ?? Load<Texture2D>($"{Root}/Textures/Lumen Poster.png");
+            var posterMaterial = MakeMaterial("Lumen Poster", "Universal Render Pipeline/Lit", m =>
+            {
+                if (posterTexture) m.SetTexture("_BaseMap", posterTexture);
+                m.SetColor("_BaseColor", posterTexture ? new Color(0.75f, 0.72f, 0.7f) : new Color(0.2f, 0.18f, 0.16f));
+                m.SetFloat("_Smoothness", 0.15f);
+            });
+            MakeTown(world, cube, cylinder, quad, concrete, roofMetal, snowCover, visor, metal, posterMaterial, landmarks);
+
+            // The chasm, all the way across the valley, and the far side.
+            float chasmMid = (ChasmNear + ChasmFar) * 0.5f;
+            landmarks.Add(MakeLandmark("Chasm", world, new Vector3(0f, -20f, chasmMid), "CHASM", "the chasm",
+                $"{ChasmFar - ChasmNear:F0} m wide and 45 m deep, right across the valley; nothing crosses it", new Vector3(600f, 44f, ChasmFar - ChasmNear - 0.6f)));
+            float farY = Height(0f, ChasmFar + 6f);
+            var farSide = MakeLandmark("Far Side", world, new Vector3(0f, farY, ChasmFar + 6f), "FAR_SIDE", "the far side", "the ground across the chasm, where the station stands", Vector3.zero);
             var farRegion = farSide.gameObject.AddComponent<BoxCollider>();
             farRegion.isTrigger = true;
-            farRegion.center = new Vector3(0f, 0f, 16f);
-            farRegion.size = new Vector3(70f, 6f, 38f);
+            farRegion.center = new Vector3(0f, 0f, 40f);
+            farRegion.size = new Vector3(620f, 30f, 84f);
             landmarks.Add(farSide);
 
             // The old station: the plate and the door, the heart in its ice, the writing on the wall.
-            var station = MakeStation(world, new Vector3(17f, 0f, 37f), cube, cylinder, quad, sphere, metal, stone, light, oldIce, writing, steamMaterial, landmarks, travellerObject.transform);
+            var station = MakeStation(world, new Vector3(StationAt.x, 0f, StationAt.y), cube, cylinder, quad, sphere, metal, stone, light, oldIce, writing, steamMaterial, landmarks, travellerObject.transform);
+            if (station.Case)
+            {
+                Object.DestroyImmediate(station.Case.gameObject);
+                landmarks.RemoveAll(l => !l);
+            }
             // A loose block of the station's stone, heavy enough for the plate, for anyone who can lift it.
             var oldBlock = MakePart("Old Block", world, cube, stone, 0.85f);
-            float blockY = Height(8f, 30f);
-            oldBlock.transform.position = new Vector3(8f, blockY + 0.43f, 30f);
+            float blockX = StationAt.x - 11f, blockZ = StationAt.y - 9f;
+            float blockY = Height(blockX, blockZ);
+            oldBlock.transform.position = new Vector3(blockX, blockY + 0.43f, blockZ);
             oldBlock.transform.rotation = Quaternion.Euler(0f, 23f, 0f);
             oldBlock.shadowCastingMode = ShadowCastingMode.On;
             oldBlock.gameObject.AddComponent<BoxCollider>();
@@ -300,14 +311,14 @@ namespace Game.Building
             landmarks.Add(oldMark);
 
             // The cliff, and the sun mirror on its top.
-            float topY = Height(-8f, 66f);
-            float footY = Height(-8f, 52f);
-            landmarks.Add(MakeLandmark("Cliff", world, new Vector3(-8f, footY + 5f, 57.2f), "CLIFF", "the cliff",
-                $"a wall of rock about {topY - footY:F0} m high, too steep to climb", new Vector3(70f, 12f, 4.5f)));
-            landmarks.Add(MakeLandmark("Cliff Top", world, new Vector3(-8f, topY, 62f), "CLIFF_TOP", "the top of the cliff",
-                $"a shelf {topY - footY:F0} m above the ground below the cliff", new Vector3(70f, 4f, 9f)));
+            float topY = Height(MirrorAt.x, MirrorAt.y);
+            float footY = Height(MirrorAt.x, CliffZ - 8f);
+            landmarks.Add(MakeLandmark("Cliff", world, new Vector3(MirrorAt.x, footY + (topY - footY) * 0.5f, CliffZ), "CLIFF", "the cliff",
+                $"a sheer wall of rock about {topY - footY:F0} m high, right across the valley; too steep to climb", new Vector3(300f, topY - footY, 6f)));
+            landmarks.Add(MakeLandmark("Cliff Top", world, new Vector3(MirrorAt.x, topY, CliffZ + 9f), "CLIFF_TOP", "the top of the cliff",
+                $"a shelf {topY - footY:F0} m above the ground below the cliff, where the sun mirror stands", new Vector3(300f, 4f, 12f)));
             var sunShaft = MakeParticleMaterial("Mirror Shaft", softLine, 2.2f);
-            var mirrorParts = MakeMirror(world, new Vector3(-8f, topY, 66f), cube, cylinder, sphere, metal, oldIce, light, sunShaft, steamMaterial, vaultDoor, landmarks, travellerObject.transform);
+            var mirrorParts = MakeMirror(world, new Vector3(MirrorAt.x, topY, MirrorAt.y), cube, cylinder, sphere, metal, oldIce, light, sunShaft, steamMaterial, vaultDoor, landmarks, travellerObject.transform);
 
             // The great minds' slabs, dead now, and a few boulders.
             var slabs = new GameObject("Slabs").transform;
@@ -315,7 +326,7 @@ namespace Game.Building
             for (int i = 0; i < 4; i++)
             {
                 var slab = MakePart($"Slab {i}", slabs, monolith, metal, 1f);
-                var at = new Vector2(24f + 5f * i, -14f + 3f * Mathf.Sin(i * 2.1f));
+                var at = new Vector2(92f + 5f * i, 40f + 3f * Mathf.Sin(i * 2.1f));
                 slab.transform.position = new Vector3(at.x, Height(at.x, at.y) + 1.2f, at.y);
                 slab.transform.localScale = new Vector3(1.4f, 4.5f + i, 0.6f);
                 slab.transform.rotation = Quaternion.Euler(8f * Mathf.Sin(i * 3f), 20f * i, 12f * Mathf.Cos(i * 2f));
@@ -323,12 +334,21 @@ namespace Game.Building
                 slab.receiveShadows = true;
                 slab.gameObject.AddComponent<MeshCollider>().sharedMesh = monolith;
             }
-            landmarks.Add(MakeLandmark("Slabs Place", slabs, new Vector3(31f, Height(31f, -14f), -14f), "SLABS", "the dark slabs",
+            landmarks.Add(MakeLandmark("Slabs Place", slabs, new Vector3(99f, Height(99f, 40f), 40f), "SLABS", "the dark slabs",
                 "tall slabs the great minds left behind; dead and cold now", new Vector3(18f, 6f, 8f)));
-            landmarks.Add(MakeLandmark("Lake Place", world, new Vector3(-31f, Height(-31f, -24f), -24f), "FROZEN_LAKE", "the frozen lake", "a lake frozen solid", new Vector3(18f, 1f, 14f)));
+            landmarks.Add(MakeLandmark("Lake Place", world, new Vector3(Lake.x, Height(Lake.x, Lake.y), Lake.y), "FROZEN_LAKE", "the frozen lake", "the town's lake, frozen solid", new Vector3(60f, 1f, 40f)));
             var random = new System.Random(42);
             var boulders = new GameObject("Boulders").transform;
-            foreach (var p in new[] { new Vector2(-9f, -8f), new Vector2(11f, -12f), new Vector2(-14f, 4f), new Vector2(7f, 22f), new Vector2(-12f, 33f), new Vector2(26f, 47f), new Vector2(-20f, 50f) })
+            var spots = new List<Vector2>();
+            while (spots.Count < 46)
+            {
+                var spot = new Vector2((float)random.NextDouble() * 440f - 220f, (float)random.NextDouble() * 330f - 40f);
+                bool town = spot.x > -80f && spot.x < 80f && spot.y > TownNear - 5f && spot.y < TownFar + 5f;
+                bool chasm = spot.y > ChasmNear - 4f && spot.y < ChasmFar + 4f;
+                bool path = Mathf.Abs(spot.x) < 10f && spot.y < TownNear;
+                if (!town && !chasm && !path && Vector2.Distance(spot, Arena) > 40f && Mathf.Abs(spot.y - CliffZ) > 5f) spots.Add(spot);
+            }
+            foreach (var p in spots)
             {
                 var rock = MakePart("Boulder", boulders, rocks[random.Next(rocks.Length)], stone, 1f);
                 float size = 0.8f + 1.2f * (float)random.NextDouble();
@@ -372,8 +392,11 @@ namespace Game.Building
             var machineShell = MakeLit("Machine Shell", new Color(0.045f, 0.045f, 0.055f), 0.72f, 0.85f);
             var machineEye = MakeMaterial("Machine Eye", "Universal Render Pipeline/Unlit", m => m.SetColor("_BaseColor", new Color(3f, 0.35f, 0.2f)));
             var sparkMaterial = MakeParticleMaterial("Spark", softDot, 3f);
+            MakeHulks(world, ball, cylinder, cube, machineShell, machineEye, snowCover, landmarks);
             var machines = new GameObject("Machines").AddComponent<Machines>();
-            Wire(machines, ("shell", machineShell), ("eyeGlow", machineEye), ("fin", joint), ("line", beamLine), ("spark", sparkMaterial), ("charge", light),
+            Wire(machines, ("shell", machineShell), ("eyeGlow", machineEye), ("fin", joint), ("line", beamLine), ("spark", sparkMaterial), ("charge", light), ("shieldGlow", hologramMaterial),
+                ("stepClip", FindClip("harvester_step")), ("bigChargeClip", FindClip("harvester_charge")), ("beamClip", FindClip("harvester_beam_loop")),
+                ("ventClip", FindClip("harvester_vent")), ("bigBreakClip", FindClip("harvester_break")), ("voiceClip", FindClip("harvester_architect")),
                 ("humClip", FindClip("seeker_hum_loop")), ("fireClip", FindClip("seeker_fire")), ("chargeClip", FindClip("seeker_charge")),
                 ("hurtClip", FindClip("seeker_hurt")), ("breakClip", FindClip("seeker_break")));
 
@@ -382,12 +405,13 @@ namespace Game.Building
 
             var director = new GameObject("Director").AddComponent<LastLightDirector>();
             Wire(director, ("traveller", traveller), ("follow", follow), ("body", body), ("drone", drone), ("maker", maker), ("mind", mind),
-                ("say", say), ("talk", talk), ("hud", hud), ("hologram", hologram), ("warmth", warmth), ("machines", machines), ("gate", station.Gate), ("heartCase", station.Case), ("heart", station.Heart),
+                ("say", say), ("talk", talk), ("hud", hud), ("hologram", hologram), ("warmth", warmth), ("machines", machines), ("gate", station.Gate), ("heart", station.Heart),
                 ("inside", station.Inside), ("farSide", farRegion), ("mirrorJoint", mirrorParts.Joint), ("socket", mirrorParts.Socket), ("mirror", mirrorParts.Mirror),
                 ("sunlight", sunlight), ("vaultLight", vaultLight), ("vaultDoor", vaultDoor), ("snow", snow),
                 ("ambience", ambience), ("wind", windSource), ("music", music), ("steps", stepsSource), ("finaleClip", FindClip("finale_2")),
                 ("jumpClip", FindClip("foley_jump_1")), ("landClip", FindClip("foley_land_1")));
             WireArray(director, "landmarks", landmarks.Cast<Object>().ToArray());
+            SetValue(director, "harvesterAt", new Vector3(Arena.x, Height(Arena.x, Arena.y) + 6.2f, Arena.y + 6f));
             WireArray(director, "snowSteps", Clips("foley_step_snow", 6));
             WireArray(director, "stoneSteps", Clips("foley_step_stone", 6));
             WireArray(director, "iceSteps", Clips("foley_step_ice", 6));
@@ -414,78 +438,6 @@ namespace Game.Building
 
         static Object[] Clips(string stem, int count) =>
             Enumerable.Range(1, count).Select(i => (Object)FindClip($"{stem}_{i}")).Where(c => c != null).ToArray();
-
-        // ---- The ground ----
-
-        /// <summary>
-        /// The height of the ground: a snowfield with low drifts, the chasm across it, the far side a
-        /// little higher, a cliff further on, a frozen lake in a hollow, mountains all round.
-        /// </summary>
-        public static float Height(float x, float z)
-        {
-            float n = Mathf.PerlinNoise(x * 0.045f + 3.1f, z * 0.045f + 7.7f) - 0.5f;
-            float fine = Mathf.PerlinNoise(x * 0.17f + 1.3f, z * 0.17f + 9.4f) - 0.5f;
-            float h = n * 1.6f + fine * 0.35f;
-            // The far side, and a cliff beyond it with a shelf on top.
-            float near = ChasmNear + 1.6f * (Mathf.PerlinNoise(x * 0.06f, 0.5f) - 0.5f) * Mathf.Clamp01(Mathf.Abs(x) / 12f);
-            float far = ChasmFar + 1.6f * (Mathf.PerlinNoise(x * 0.06f + 5f, 2.5f) - 0.5f) * Mathf.Clamp01(Mathf.Abs(x) / 12f);
-            if (z > far) h += 0.9f + 9f * Smooth(56f, 58.5f, z + 3f * (Mathf.PerlinNoise(x * 0.08f, 4f) - 0.5f));
-            // The chasm: sheer walls, deep and dark.
-            float inside = Smooth(near - 0.5f, near + 0.4f, z) * (1f - Smooth(far - 0.4f, far + 0.5f, z));
-            h = Mathf.Lerp(h, -40f + fine * 4f, inside);
-            // The frozen lake, a shallow hollow.
-            float lake = 1f - Smooth(0.7f, 1f, new Vector2((x + 31f) / 14f, (z + 24f) / 9f).magnitude);
-            h -= lake * 0.6f;
-            // The hill the vault is dug into, behind where the survivor wakes.
-            h += 6.5f * (1f - Smooth(0.55f, 1f, new Vector2(x / 19f, (z + 36f) / 11.5f).magnitude));
-            // Mountains round the edge.
-            float sides = Mathf.Max(Smooth(62f, 98f, Mathf.Abs(x)), Smooth(-58f, -88f, z));
-            h += sides * (34f + 22f * Mathf.PerlinNoise(x * 0.03f + 11f, z * 0.03f + 2f));
-            // Lower ridges far ahead, so the dying sun shows over them.
-            h += Smooth(112f, 150f, z) * (1f - sides) * (10f + 9f * Mathf.PerlinNoise(x * 0.05f + 4f, 1.5f));
-            return h;
-        }
-
-        static float Smooth(float a, float b, float x)
-        {
-            float t = Mathf.Clamp01((x - a) / (b - a));
-            return t * t * (3f - 2f * t);
-        }
-
-        static float LakeAmount(float x, float z) => 1f - Smooth(0.7f, 1f, new Vector2((x + 31f) / 14f, (z + 24f) / 9f).magnitude);
-
-        static Mesh MakeGround()
-        {
-            const float minX = -110f, maxX = 110f, minZ = -100f, maxZ = 160f, step = 1f;
-            int nx = Mathf.RoundToInt((maxX - minX) / step) + 1, nz = Mathf.RoundToInt((maxZ - minZ) / step) + 1;
-            var vertices = new Vector3[nx * nz];
-            var colours = new Color[nx * nz];
-            for (int j = 0; j < nz; j++)
-                for (int i = 0; i < nx; i++)
-                {
-                    float x = minX + i * step, z = minZ + j * step;
-                    vertices[j * nx + i] = new Vector3(x, Height(x, z), z);
-                    colours[j * nx + i] = new Color(LakeAmount(x, z) > 0.3f ? 1f : 0f, 0f, 0f, 1f);
-                }
-            var triangles = new int[(nx - 1) * (nz - 1) * 6];
-            int t = 0;
-            for (int j = 0; j < nz - 1; j++)
-                for (int i = 0; i < nx - 1; i++)
-                {
-                    int a = j * nx + i, b = a + 1, c = a + nx, d = c + 1;
-                    triangles[t++] = a; triangles[t++] = c; triangles[t++] = b;
-                    triangles[t++] = b; triangles[t++] = c; triangles[t++] = d;
-                }
-            return SaveMesh("Frozen Ground", mesh =>
-            {
-                mesh.indexFormat = IndexFormat.UInt32;
-                mesh.vertices = vertices;
-                mesh.colors = colours;
-                mesh.triangles = triangles;
-                mesh.RecalculateNormals();
-                mesh.RecalculateBounds();
-            });
-        }
 
         /// <summary>A flat ring in the XZ plane, uv.x around it and uv.y from the inside out.</summary>
         static Mesh MakeRing(string name, int segments, float inner, float outer)
@@ -895,8 +847,8 @@ namespace Game.Building
         {
             var root = new GameObject("Vault").transform;
             root.SetParent(parent, false);
-            float y = Height(0f, -25.5f);
-            root.position = new Vector3(0f, y, -25.5f);
+            float y = Height(0f, VaultDoorZ + 8f);
+            root.position = new Vector3(0f, y, VaultDoorZ);
             var front = MakePart("Front", root, cube, concrete, 1f);
             front.transform.localPosition = new Vector3(0f, 1.6f, -2.5f);
             front.transform.localScale = new Vector3(13f, 6.4f, 5f);
@@ -1346,7 +1298,7 @@ namespace Game.Building
             bloom.highQualityFiltering.Override(true);
             AddOverride<Tonemapping>(profile).mode.Override(TonemappingMode.ACES);
             var grading = AddOverride<ColorAdjustments>(profile);
-            grading.postExposure.Override(0.85f);
+            grading.postExposure.Override(1.15f);
             grading.contrast.Override(14f);
             grading.saturation.Override(-6f);
             var balance = AddOverride<WhiteBalance>(profile);

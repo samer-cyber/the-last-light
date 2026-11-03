@@ -74,6 +74,8 @@ namespace Game
         public Transform Body => body;
         /// <summary>Rising on a balloon.</summary>
         public bool Floating => Holding && Holding.GetComponent<Floater>();
+        /// <summary>A push from outside (the blizzard's wind), in metres a second.</summary>
+        public Vector3 Wind { get; set; }
         /// <summary>Falling slowly on wings.</summary>
         public bool Gliding { get; private set; }
 
@@ -96,8 +98,9 @@ namespace Game
             var keys = Keyboard.current;
             bool free = !Typing && !Scripted && !falling && keys != null;
 
-            // Riding a lift: move with it first.
+            // Riding a lift: move with it first. The storm's wind pushes too.
             if (riding && riding.Delta.sqrMagnitude > 0f) controller.Move(riding.Delta);
+            if (Wind.sqrMagnitude > 0f) controller.Move(Wind * dt);
 
             // Where the keys point, flat, the way the camera faces.
             Vector2 input = Vector2.zero;

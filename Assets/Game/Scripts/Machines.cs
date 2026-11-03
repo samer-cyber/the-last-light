@@ -12,6 +12,8 @@ namespace Game
         [SerializeField] Material shell, eyeGlow, fin;
         [SerializeField] Material line, spark, charge;
         [SerializeField] AudioClip humClip, fireClip, chargeClip, hurtClip, breakClip;
+        [SerializeField] Material shieldGlow;
+        [SerializeField] AudioClip stepClip, bigChargeClip, beamClip, ventClip, bigBreakClip, voiceClip;
 
         public Material Charge => charge;
         int made;
@@ -85,6 +87,149 @@ namespace Game
             if (humClip) hum.Play();
             return seeker;
         }
+
+        /// <summary>
+        /// The Harvester: an angular hull on three long legs, one red eye in front, a vent on its back,
+        /// a cage under its belly with the heart in it, and a red shield round it all.
+        /// </summary>
+        public Harvester Harvester(Vector3 at, Transform survivor, Holdable heart)
+        {
+            var root = new GameObject("Harvester");
+            root.transform.position = at;
+            root.SetActive(false);
+            var body = new GameObject("Body").transform;
+            body.SetParent(root.transform, false);
+            body.localScale = Vector3.one * 1.45f;
+            Part(body, PrimitiveType.Cube, shell, new Vector3(0f, 0f, 0f), new Vector3(4.6f, 2.2f, 6.2f));
+            Part(body, PrimitiveType.Cube, shell, new Vector3(0f, 1.3f, -0.6f), new Vector3(3.4f, 1.1f, 4f));
+            Part(body, PrimitiveType.Cube, shell, new Vector3(0f, -0.2f, 3.4f), new Vector3(2.6f, 1.6f, 1.4f));
+            foreach (float side in new[] { -1f, 1f })
+                Part(body, PrimitiveType.Cube, fin, new Vector3(side * 2.5f, 0.4f, 0f), new Vector3(0.3f, 1.4f, 5.4f)).transform.localRotation = Quaternion.Euler(0f, 0f, side * 12f);
+            var eye = Part(body, PrimitiveType.Sphere, eyeGlow, new Vector3(0f, -0.1f, 4.15f), Vector3.one * 0.9f);
+            eye.name = "Eye";
+            Object.Destroy(eye.GetComponent<Collider>());
+            var eyeLight = new GameObject("Eye Light").AddComponent<Light>();
+            eyeLight.transform.SetParent(eye.transform, false);
+            eyeLight.type = LightType.Point;
+            eyeLight.color = new Color(1f, 0.2f, 0.12f);
+            eyeLight.range = 22f;
+            eyeLight.intensity = 3f;
+            var vent = Part(body, PrimitiveType.Cube, eyeGlow, new Vector3(0f, 1.95f, -1.6f), new Vector3(1.8f, 0.35f, 1.6f));
+            vent.name = "Vent";
+            var ventLight = new GameObject("Vent Light").AddComponent<Light>();
+            ventLight.transform.SetParent(vent.transform, false);
+            ventLight.transform.localPosition = Vector3.up * 2f;
+            ventLight.type = LightType.Point;
+            ventLight.color = new Color(1f, 0.5f, 0.2f);
+            ventLight.range = 14f;
+            ventLight.intensity = 0f;
+            // The cage under its belly, with the heart in it.
+            var cage = new GameObject("Cage").transform;
+            cage.SetParent(body, false);
+            cage.localPosition = new Vector3(0f, -1.6f, 0.4f);
+            for (int i = 0; i < 6; i++)
+            {
+                var bar = Part(cage, PrimitiveType.Cylinder, fin, Quaternion.Euler(0f, 60f * i, 0f) * Vector3.forward * 0.75f + Vector3.down * 0.5f, new Vector3(0.08f, 0.75f, 0.08f));
+                Object.Destroy(bar.GetComponent<Collider>());
+            }
+            // The shield: a sphere of red shimmer, not solid.
+            var shield = Part(root.transform, PrimitiveType.Sphere, null, Vector3.up * 0.2f, Vector3.one * 14f);
+            shield.name = "Shield";
+            Object.Destroy(shield.GetComponent<Collider>());
+            var shieldRenderer = shield.GetComponent<Renderer>();
+            if (shieldGlow)
+            {
+                var m = new Material(shieldGlow);
+                m.SetTexture("_MainTex", Hexes());
+                m.SetColor("_Tint", new Color(1f, 0.25f, 0.18f));
+                m.SetFloat("_Colour", 0f);
+                m.SetFloat("_Intensity", 0.35f);
+                m.SetFloat("_Reveal", 0f);
+                shieldRenderer.sharedMaterial = m;
+            }
+            shieldRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            // Three legs: hips on the hull, thighs and shins placed each frame.
+            var hips = new Transform[3];
+            var thighs = new Transform[3];
+            var shins = new Transform[3];
+            for (int i = 0; i < 3; i++)
+            {
+                hips[i] = new GameObject("Hip").transform;
+                hips[i].SetParent(body, false);
+                hips[i].localPosition = Quaternion.Euler(0f, 120f * i + 60f, 0f) * Vector3.forward * 2f + Vector3.down * 0.5f;
+                thighs[i] = Part(root.transform, PrimitiveType.Cylinder, shell, Vector3.zero, Vector3.one).transform;
+                shins[i] = Part(root.transform, PrimitiveType.Cylinder, fin, Vector3.zero, Vector3.one).transform;
+            }
+            var beam = new GameObject("Beam").AddComponent<LineRenderer>();
+            beam.transform.SetParent(root.transform, false);
+            beam.sharedMaterial = line;
+            beam.positionCount = 2;
+            beam.useWorldSpace = true;
+            beam.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            beam.enabled = false;
+            var audio = root.AddComponent<AudioSource>();
+            audio.spatialBlend = 1f;
+            audio.minDistance = 10f;
+            audio.maxDistance = 140f;
+            var loop = root.AddComponent<AudioSource>();
+            loop.spatialBlend = 1f;
+            loop.minDistance = 10f;
+            loop.maxDistance = 120f;
+            var harvester = root.AddComponent<Harvester>();
+            Set(harvester, "body", body);
+            Set(harvester, "eye", eye.transform);
+            Set(harvester, "vent", vent.transform);
+            Set(harvester, "cage", cage);
+            Set(harvester, "eyeLight", eyeLight);
+            Set(harvester, "ventLight", ventLight);
+            Set(harvester, "eyeRenderer", eye.GetComponent<Renderer>());
+            Set(harvester, "ventRenderer", vent.GetComponent<Renderer>());
+            Set(harvester, "shieldRenderer", shieldRenderer);
+            Set(harvester, "beam", beam);
+            Set(harvester, "hips", hips);
+            Set(harvester, "thighs", thighs);
+            Set(harvester, "shins", shins);
+            Set(harvester, "loop", loop);
+            Set(harvester, "stepClip", stepClip);
+            Set(harvester, "chargeClip", bigChargeClip);
+            Set(harvester, "beamClip", beamClip);
+            Set(harvester, "ventClip", ventClip);
+            Set(harvester, "voiceClip", voiceClip);
+            Set(harvester, "weakPoint", vent.transform);
+            Set(harvester, "sound", audio);
+            Set(harvester, "hurtClip", hurtClip);
+            Set(harvester, "breakClip", bigBreakClip);
+            harvester.Id = "HARVESTER";
+            root.SetActive(true);
+            harvester.Set(survivor, this, heart);
+            return harvester;
+        }
+
+        /// <summary>A hex grid of light lines, for the shield.</summary>
+        static Texture2D Hexes()
+        {
+            const int size = 128;
+            var texture = new Texture2D(size, size, TextureFormat.RGBA32, true) { wrapMode = TextureWrapMode.Repeat, name = "Shield Hexes" };
+            var pixels = new Color[size * size];
+            for (int y = 0; y < size; y++)
+                for (int x = 0; x < size; x++)
+                {
+                    Vector2 p = new Vector2(x, y) / size * 6f;
+                    Vector2 r = new Vector2(1f, 1.7320508f), h = r * 0.5f;
+                    Vector2 a = new Vector2(Mod(p.x, r.x) - h.x, Mod(p.y, r.y) - h.y);
+                    Vector2 b = new Vector2(Mod(p.x - h.x, r.x) - h.x, Mod(p.y - h.y, r.y) - h.y);
+                    Vector2 g = a.sqrMagnitude < b.sqrMagnitude ? a : b;
+                    Vector2 q = new Vector2(Mathf.Abs(g.x), Mathf.Abs(g.y));
+                    float edge = 0.5f - Mathf.Max(Vector2.Dot(q, new Vector2(0.5f, 0.8660254f)), q.x);
+                    float v = 1f - Mathf.Clamp01((edge - 0.02f) / 0.04f);
+                    pixels[y * size + x] = new Color(v, v, v, 1f);
+                }
+            texture.SetPixels(pixels);
+            texture.Apply(true);
+            return texture;
+        }
+
+        static float Mod(float a, float b) => a - b * Mathf.Floor(a / b);
 
         static GameObject Part(Transform parent, PrimitiveType type, Material material, Vector3 at, Vector3 size)
         {

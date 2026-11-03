@@ -60,7 +60,10 @@ namespace Game
         [SerializeField] AudioClip jumpClip;
         [SerializeField] AudioClip landClip;
         [SerializeField] Hologram hologram;
+        [SerializeField, Tooltip("The middle of the world, and how far from it the blizzard begins.")] Vector2 middle = new Vector2(0f, 120f);
+        [SerializeField] float blizzardFrom = 300f;
         [SerializeField] Warmth warmth;
+        [SerializeField, Tooltip("Where the Harvester stands guard, by the station.")] Vector3 harvesterAt;
         [SerializeField] Machines machines;
         [SerializeField] string droneName = "Spark";
         [SerializeField, Tooltip("Seconds without progress or a word before the drone offers an idea; it waits twice as long after each one.")] float ideaAfter = 60f;
@@ -73,7 +76,24 @@ namespace Game
         readonly List<string> remembered = new List<string>();
         readonly HashSet<string> told = new HashSet<string>();
         readonly List<string> offered = new List<string>();
-        float hitBarkAt = -100f;
+        float hitBarkAt = -100f, whiteAt = -100f, baseFog = -1f;
+        Harvester harvester;
+
+        /// <summary>The Harvester knew the survivor: Spark heard it.</summary>
+        IEnumerator Architect()
+        {
+            yield return new WaitForSeconds(2.6f);
+            bond.Event("architect", -22, "The Harvester scanned the survivor and called them ARCHITECT: it knew them. They helped build the great minds", 10, Time.time);
+            yield return Speak("Architect? It knows you. Why does it know you?", "HURT");
+        }
+
+        IEnumerator HarvesterDown()
+        {
+            stage = Stage.Carry;
+            ShowGoal();
+            bond.Event("harvester_beaten", 12, "Together you brought down the Harvester and freed the mirror's heart", 9, Time.time);
+            yield return Speak("It's down. The heart fell in the snow. It's still warm, I can feel it from here. Take it.", "HAPPY");
+        }
         int broken;
 
         /// <summary>
@@ -89,14 +109,28 @@ namespace Game
             ["all broken"] = ("That's all of them. I think. Give me a second to stop shaking.", "SAD"),
             ["fell"] = ("You went down. I pulled you back here. Please don't do that again.", "WORRIED"),
             ["scan"] = ("Its eye. That's where it's thinnest. Hit it there.", "SURE"),
+            ["white"] = ("No. Not into the white. Nothing that goes in there comes back out.", "SCARED"),
+            ["harvester"] = ("That's a Harvester. That's what took the mirror's heart. It's in the cage, under its belly.", "SCARED"),
+            ["vent"] = ("Its back's glowing. The vent. Its shield's down while it cools. Now!", "SURE"),
         };
 
         void Bark(string key, bool once = false)
         {
-            if (once && !told.Add("bark " + key)) return;
+            if (once && told.Contains("bark " + key)) return;
             if (!Barks.TryGetValue(key, out var b)) return;
-            // Quick lines go straight out, not behind a thought in progress.
-            StartCoroutine(Speak(b.line, b.mood));
+            // Quick lines go straight out, not behind a thought in progress; but one at a time.
+            if (barking || drone.Speaking) return;
+            told.Add("bark " + key);
+            StartCoroutine(Barking(b.line, b.mood));
+        }
+
+        bool barking;
+
+        IEnumerator Barking(string line, string mood)
+        {
+            barking = true;
+            yield return Speak(line, mood);
+            barking = false;
         }
 
         /// <summary>Watches the machines: first sightings, lures, breaks; and keeps Spark behind the survivor while they hunt.</summary>
@@ -117,9 +151,10 @@ namespace Game
                     {
                         m.Broke += Broke;
                     }
+                    if (m is Harvester h && h.Venting) Bark("vent", true);
                     if (m is Seeker s && s.Hunting)
                     {
-                        if (d < 40f) Bark("seekers", true);
+                        if (d < 40f && !(harvester && harvester.IsAwake)) Bark("seekers", true);
                         if (!s.Prey.IsSurvivor && d < 40f) Bark("lured", true);
                     }
                     if (d < nearest) { nearest = d; threat = m; }
@@ -204,6 +239,18 @@ namespace Game
                     if (m is Seeker s && Vector3.Distance(s.transform.position, at) < 16f) s.Distract(drone.transform.position, 5f);
             };
             StartCoroutine(Fight());
+            if (machines && heart)
+            {
+                harvester = machines.Harvester(harvesterAt, traveller.transform, heart);
+                harvester.Woke += () =>
+                {
+                    if (stage < Stage.Enter) stage = Stage.Enter;
+                    ShowGoal();
+                    Bark("harvester", true);
+                };
+                harvester.Spoke += () => Beat("architect", Architect);
+                harvester.Broke += _ => Beat("harvester down", HarvesterDown);
+            }
             say.Said += words => waiting.Enqueue((words, false));
             say.Placeholder = "say something to " + droneName;
             talk.Spoken += wav => StartCoroutine(Hear(wav));
@@ -758,14 +805,10 @@ namespace Game
                 }
                 if (!told.Contains("plate") && gate && Vector3.Distance(p, gate.transform.position) < 9f && !gate.Open)
                     Beat("plate", Line("The door's shut. There's a plate in the ground before it.", "CURIOUS"));
-                if (stage <= Stage.Enter && inside && inside.bounds.Contains(p))
-                {
-                    stage = Stage.Free;
-                    ShowGoal();
-                    Beat("inside", Line("There it is. The last heart, frozen in.", "CURIOUS"), ReadTheWall);
-                }
+                // Inside the old station: someone's writing on the wall.
+                if (inside && inside.bounds.Contains(p)) Beat("inside", Line("Someone was here before the cold. There's writing.", "CURIOUS"), ReadTheWall);
                 // However they got here, a free heart means carrying it.
-                if (stage < Stage.Carry && heartCase && heartCase.Free)
+                if (stage < Stage.Carry && heart && !heart.Locked)
                 {
                     stage = Stage.Carry;
                     ShowGoal();
@@ -773,6 +816,25 @@ namespace Game
                 var top = landmarks.FirstOrDefault(l => l && l.Id == "MIRROR");
                 if (!told.Contains("mirror") && top && Vector3.Distance(p, top.Point) < 12f && Mathf.Abs(p.y - top.Point.y) < 5f)
                     Beat("mirror", Line(socket && socket.Full ? "Here it is. The joint's frozen." : "The socket's empty, and its joint is frozen solid.", "WORRIED"));
+                // The blizzard at the edge of the world: thicker the further out, and past a point the wind turns them back.
+                Vector2 outward = new Vector2(p.x - middle.x, (p.z - middle.y) * 0.9f);
+                float storm = Mathf.Clamp01((outward.magnitude - blizzardFrom) / 60f);
+                if (baseFog < 0f) baseFog = RenderSettings.fogDensity;
+                RenderSettings.fogDensity = Mathf.Lerp(baseFog, 0.08f, storm * storm);
+                if (snow)
+                {
+                    var emission = snow.emission;
+                    emission.rateOverTimeMultiplier = 1f + 6f * storm;
+                }
+                if (wind && arrived) wind.volume = windVolume * (1f + 1.2f * storm);
+                Vector3 away = new Vector3(outward.x, 0f, outward.y).normalized;
+                traveller.Wind = storm > 0.55f ? -away * 7f * (storm - 0.55f) / 0.45f : Vector3.zero;
+                if (storm > 0.45f && Time.time - whiteAt > 40f)
+                {
+                    whiteAt = Time.time;
+                    Bark("white");
+                }
+
                 // Quiet and stuck: an idea of its own, from what it sees; each one waits twice as long as the last, until the step changes.
                 if (ideaStage != StageWords())
                 {
@@ -804,7 +866,7 @@ namespace Game
             string step = stage switch
             {
                 Stage.Cross => "Get across the chasm",
-                Stage.Enter => "Get into the old station",
+                Stage.Enter => "Take the mirror's heart back from the Harvester",
                 Stage.Free => "Free the heart from the ice",
                 Stage.Carry when socket && !socket.Full && mirrorJoint && !mirrorJoint.Free => "Take the heart to the mirror, and thaw its joint",
                 Stage.Carry when socket && !socket.Full => "Set the heart in the mirror's socket",
@@ -817,7 +879,7 @@ namespace Game
         string StageWords() => stage switch
         {
             Stage.Cross => "get across the chasm to the station",
-            Stage.Enter => "get into the station; the spare hearts are inside",
+            Stage.Enter => "take the mirror's heart back from the Harvester by the station: it carries it in a cage under its belly",
             Stage.Free => "free the heart from its case of ice",
             Stage.Carry => (socket && !socket.Full ? "carry the heart up the cliff and set it in the mirror's socket" : "") +
                            (socket && !socket.Full && mirrorJoint && !mirrorJoint.Free ? ", and " : "") +
@@ -1103,7 +1165,7 @@ namespace Game
                 "DOOR" => gate && gate.Open ? "open now: sunk into the ground" : "shut",
                 "PLATE" => gate ? $"{gate.Load:F0} kg on it now; it needs about 250" : "",
                 "ICE_CASE" => heartCase && heartCase.Free ? "melted away" : heartCase && heartCase.Rate > 0.05f ? $"melting, {heartCase.Progress * 100f:F0}% gone" : "solid",
-                "HEART" => heart && socket && socket.Full ? "set in the mirror's socket" : traveller.Holding == heart ? "in the survivor's hands" : heartCase && !heartCase.Free ? "frozen in the ice" : "free",
+                "HEART" => heart && socket && socket.Full ? "set in the mirror's socket" : traveller.Holding == heart ? "in the survivor's hands" : heart && heart.Locked ? "in a cage under the Harvester's belly; it took it from the mirror" : "free, in the snow",
                 "MIRROR_JOINT" => mirrorJoint && mirrorJoint.Free ? "thawed and free" : mirrorJoint && mirrorJoint.Rate > 0.05f ? $"melting, {mirrorJoint.Progress * 100f:F0}% gone" : "frozen solid",
                 "SOCKET" => socket && socket.Full ? "the heart is in it" : "empty",
                 _ => "",
