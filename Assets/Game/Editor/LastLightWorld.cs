@@ -17,7 +17,7 @@ namespace Game.Building
         const float TownNear = 25f, TownFar = 115f, ChasmNear = 140f, ChasmFar = 155f, CliffZ = 262f;
         /// <summary>Where the survivor stands outside the vault door.</summary>
         static readonly Vector3 Start = new Vector3(0f, 0f, -27f);
-        static readonly Vector2 VaultHill = new Vector2(0f, -50f);
+        static readonly Vector2 VaultHill = new Vector2(0f, -52f);
         const float VaultDoorZ = -33.5f;
         static readonly Vector2 StationAt = new Vector2(34f, 178f);
         static readonly Vector2 Arena = new Vector2(26f, 206f);
@@ -39,8 +39,8 @@ namespace Game.Building
             float town = Inside(x, z, -75f, 75f, TownNear, TownFar, 18f);
             h = Mathf.Lerp(h, n * 0.5f + fine * 0.15f, town);
             // The vault's hill, and the cut in its north face where the door is.
-            float hill = 1f - Smooth(0.45f, 1f, new Vector2((x - VaultHill.x) / 30f, (z - VaultHill.y) / 19f).magnitude);
-            h += 11f * hill;
+            float hill = 1f - Smooth(0.45f, 1f, new Vector2((x - VaultHill.x) / 30f, (z - VaultHill.y) / 24f).magnitude);
+            h += 12f * hill;
             float cut = Inside(x, z, -6.5f, 6.5f, VaultDoorZ, VaultDoorZ + 14f, 3f);
             h = Mathf.Lerp(h, n * 0.3f, cut);
             // A trodden way from the vault to the town.

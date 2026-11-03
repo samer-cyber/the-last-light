@@ -210,6 +210,36 @@ namespace Game
             honourFade = honour.schedule.Execute(() => honour.RemoveFromClassList("hud__honour--shown")).StartingIn((long)(seconds * 1000f));
         }
 
+        /// <summary>Frost over the view (inside the pod), 0 to 1.</summary>
+        public void Frost(float amount)
+        {
+            Build();
+            if (!frostTexture)
+            {
+                // Frost: thick at the edges, thin in the middle, with a grain of crystals.
+                const int size = 256;
+                frostTexture = new Texture2D(size, size, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp, name = "Frost" };
+                var pixels = new Color[size * size];
+                for (int y = 0; y < size; y++)
+                    for (int x = 0; x < size; x++)
+                    {
+                        float u = x / (float)size - 0.5f, v = y / (float)size - 0.5f;
+                        float edge = Mathf.Clamp01((new Vector2(u * 1.2f, v).magnitude - 0.12f) / 0.4f);
+                        float grain = Mathf.PerlinNoise(x * 0.09f, y * 0.09f) * 0.6f + Mathf.PerlinNoise(x * 0.35f, y * 0.35f) * 0.4f;
+                        float a = Mathf.Clamp01(edge * 1.1f + grain * 0.35f - 0.1f);
+                        pixels[y * size + x] = new Color(0.82f, 0.9f, 1f, a);
+                    }
+                frostTexture.SetPixels(pixels);
+                frostTexture.Apply();
+                frost.style.backgroundImage = new StyleBackground(frostTexture);
+            }
+            frost.style.opacity = amount;
+            frost.style.display = amount > 0.001f ? DisplayStyle.Flex : DisplayStyle.None;
+        }
+
+        Texture2D frostTexture;
+        VisualElement frost;
+
         /// <summary>A red flash at the edges: the survivor was hit.</summary>
         public void Flash(float strength)
         {
@@ -294,6 +324,8 @@ namespace Game
             lines.SetPixels(new[] { new Color(0f, 0f, 0f, 0.55f), new Color(0f, 0f, 0f, 0f), new Color(0.6f, 0.95f, 1f, 0.08f), new Color(0f, 0f, 0f, 0f) });
             lines.Apply();
             hurt = Element("hud__hurt");
+            frost = Element("hud__frost");
+            frost.style.display = DisplayStyle.None;
             scanLines = Element("hud__scanlines");
             scanLines.style.backgroundImage = new StyleBackground(lines);
             scanLines.style.display = DisplayStyle.None;

@@ -263,7 +263,15 @@ namespace Game.Building
             // ---- The world's things ----
             var landmarks = new List<Landmark>();
             var world = new GameObject("World").transform;
-            var (vaultLight, vaultDoor) = MakeVault(world, cube, cylinder, concrete, metal, warmWindow, groundMaterial, landmarks);
+            var frost = MakeLit("Frost", new Color(0.72f, 0.82f, 0.92f), 0.7f, 0f);
+            var vault = MakeVault(world, cube, cylinder, ball, concrete, metal, warmWindow, glass, frost, light, landmarks);
+            var vaultLight = vault.Light;
+            var vaultDoor = vault.Door;
+            // The survivor wakes in their pod, at the far end of the hall.
+            travellerObject.transform.position = vault.PodStand + Vector3.up * 0.05f;
+            figure.Body.rotation = Quaternion.LookRotation(vault.PodFacing, Vector3.up);
+            cameraObject.transform.SetPositionAndRotation(vault.PodStand + Vector3.up * 1.6f - vault.PodFacing * 0.1f, Quaternion.LookRotation(vault.PodFacing, Vector3.up));
+            drone.transform.position = vault.PodStand + vault.PodFacing * 1.5f + Vector3.up * 1.5f;
 
             // The frozen town.
             var snowCover = MakeLit("Snow Cover", new Color(0.78f, 0.8f, 0.86f), 0.25f, 0f);
@@ -411,6 +419,7 @@ namespace Game.Building
                 ("ambience", ambience), ("wind", windSource), ("music", music), ("steps", stepsSource), ("finaleClip", FindClip("finale_2")),
                 ("jumpClip", FindClip("foley_jump_1")), ("landClip", FindClip("foley_land_1")));
             WireArray(director, "landmarks", landmarks.Cast<Object>().ToArray());
+            Wire(director, ("podLid", vault.Lid), ("hall", vault.Hall), ("crackClip", FindClip("ice_crack")), ("openClip", FindClip("mirror_turn")));
             SetValue(director, "harvesterAt", new Vector3(Arena.x, Height(Arena.x, Arena.y) + 6.2f, Arena.y + 6f));
             WireArray(director, "snowSteps", Clips("foley_step_snow", 6));
             WireArray(director, "stoneSteps", Clips("foley_step_stone", 6));
@@ -843,62 +852,6 @@ namespace Game.Building
         /// The vault, dug into the hill behind where the survivor wakes: a concrete front, a round door
         /// on a hinge, two small windows still warm inside, a light that wakes at the end.
         /// </summary>
-        static (Light, Transform) MakeVault(Transform parent, Mesh cube, Mesh cylinder, Material concrete, Material metal, Material window, Material snow, List<Landmark> landmarks)
-        {
-            var root = new GameObject("Vault").transform;
-            root.SetParent(parent, false);
-            float y = Height(0f, VaultDoorZ + 8f);
-            root.position = new Vector3(0f, y, VaultDoorZ);
-            var front = MakePart("Front", root, cube, concrete, 1f);
-            front.transform.localPosition = new Vector3(0f, 1.6f, -2.5f);
-            front.transform.localScale = new Vector3(13f, 6.4f, 5f);
-            front.shadowCastingMode = ShadowCastingMode.On;
-            front.gameObject.AddComponent<BoxCollider>();
-            var lintel = MakePart("Lintel", root, cube, metal, 1f);
-            lintel.transform.localPosition = new Vector3(0f, 4.6f, 0.1f);
-            lintel.transform.localScale = new Vector3(13.6f, 0.5f, 0.6f);
-            lintel.shadowCastingMode = ShadowCastingMode.On;
-            var frame = MakePart("Door Frame", root, cylinder, metal, 1f);
-            frame.transform.localPosition = new Vector3(0f, 2f, 0.02f);
-            frame.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-            frame.transform.localScale = new Vector3(4.1f, 0.1f, 4.1f);
-            // The door turns on a hinge at its left edge.
-            var hinge = new GameObject("Door Hinge").transform;
-            hinge.SetParent(root, false);
-            hinge.localPosition = new Vector3(-1.7f, 2f, 0.25f);
-            var door = MakePart("Door", hinge, cylinder, metal, 1f);
-            door.transform.localPosition = new Vector3(1.7f, 0f, 0f);
-            door.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-            door.transform.localScale = new Vector3(3.4f, 0.17f, 3.4f);
-            door.shadowCastingMode = ShadowCastingMode.On;
-            door.gameObject.AddComponent<BoxCollider>().size = new Vector3(0.7f, 2f, 0.7f);
-            var wheel = MakePart("Wheel", door.transform, cylinder, metal, 1f);
-            wheel.transform.localPosition = new Vector3(0f, 1.3f, 0f);
-            wheel.transform.localScale = new Vector3(0.3f, 0.5f, 0.3f);
-            foreach (float side in new[] { -1f, 1f })
-            {
-                var pane = MakePart("Window", root, cube, window, 1f);
-                pane.transform.localPosition = new Vector3(side * 4.3f, 2.9f, 0.01f);
-                pane.transform.localScale = new Vector3(1.1f, 0.5f, 0.05f);
-                pane.shadowCastingMode = ShadowCastingMode.Off;
-            }
-            var cap = MakePart("Snow Cap", root, Resources.GetBuiltinResource<Mesh>("Sphere.fbx"), snow, 1f);
-            cap.transform.localPosition = new Vector3(0f, 4.9f, -3.5f);
-            cap.transform.localScale = new Vector3(15f, 2.6f, 8f);
-            cap.shadowCastingMode = ShadowCastingMode.On;
-            var warmth = new GameObject("Vault Light").AddComponent<Light>();
-            warmth.transform.SetParent(root, false);
-            warmth.transform.localPosition = new Vector3(0f, 2.5f, 2.5f);
-            warmth.type = LightType.Point;
-            warmth.color = new Color(1f, 0.7f, 0.4f);
-            warmth.range = 22f;
-            warmth.intensity = 0f;
-            warmth.shadows = LightShadows.Soft;
-            landmarks.Add(MakeLandmark("Vault Place", root, root.position + Vector3.up * 2f, "VAULT", "the vault door",
-                "the round door of the vault, sealed and frosted, in the snowbank; the last people sleep inside, and its windows are still faintly warm", new Vector3(13f, 6f, 2f)));
-            return (warmth, hinge);
-        }
-
         struct Station
         {
             public Gate Gate;

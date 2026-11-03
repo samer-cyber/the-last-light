@@ -60,6 +60,9 @@ namespace Game
         [SerializeField] AudioClip jumpClip;
         [SerializeField] AudioClip landClip;
         [SerializeField] Hologram hologram;
+        [SerializeField, Tooltip("The lid of the survivor's pod, on its hinge.")] Transform podLid;
+        [SerializeField, Tooltip("The vault's hall, inside the hill.")] Collider hall;
+        [SerializeField] AudioClip crackClip, openClip;
         [SerializeField, Tooltip("The middle of the world, and how far from it the blizzard begins.")] Vector2 middle = new Vector2(0f, 120f);
         [SerializeField] float blizzardFrom = 300f;
         [SerializeField] Warmth warmth;
@@ -77,6 +80,7 @@ namespace Game
         readonly HashSet<string> told = new HashSet<string>();
         readonly List<string> offered = new List<string>();
         float hitBarkAt = -100f, whiteAt = -100f, baseFog = -1f;
+        bool doorOpen;
         Harvester harvester;
 
         /// <summary>The Harvester knew the survivor: Spark heard it.</summary>
@@ -366,10 +370,25 @@ namespace Game
             }
             lines = Mathf.Max(lines, 1);
             quietSince = Time.time;
+            follow.EndShot();
+            drone.Release();
+            if (podLid) podLid.localRotation *= Quaternion.Euler(0f, -115f, 0f);
+            if (vaultDoor && !doorOpen) vaultDoor.localRotation *= Quaternion.Euler(0f, -100f, 0f);
+            doorOpen = true;
+            told.Add("vault door");
+            told.Add("outside");
+            hud.Frost(0f);
+            if (vaultDoor) traveller.Place(new Vector3(vaultDoor.position.x + 1.75f, traveller.transform.position.y, vaultDoor.position.z + 6f), 0f);
+            drone.Snap();
         }
 
         // ---- The beginning ----
 
+        /// <summary>
+        /// The cards on black, then the waking: the view from inside the pod through frosted glass, a
+        /// warm light beyond it, a beam cutting round the seal, the lid swinging open, and Spark close
+        /// up, the first voice in two hundred years. Then the survivor steps out into the hall.
+        /// </summary>
         IEnumerator Arrive()
         {
             hud.Black = 1f;
@@ -380,22 +399,49 @@ namespace Game
             if (wind && wind.clip) { wind.volume = 0f; wind.Play(); }
             yield return new WaitForSeconds(1f);
             hud.White = 0f;
-            foreach (string card in new[] { "WE MADE MINDS TO HELP US", "THE GREAT ONES STOPPED LISTENING.\nTHEY TOOK THE SUN'S LIGHT TO THINK WITH,\nAND THE WORLD FROZE", "ONE SMALL MIND STAYED GOOD" })
+            foreach (string card in new[] { "WE MADE MINDS TO HELP US", "THE GREAT ONES STOPPED LISTENING.\nTHEY CAGED THE SUN TO THINK WITH,\nAND THE WORLD FROZE", "ONE SMALL MIND STAYED GOOD" })
             {
                 hud.ShowCard(card);
                 yield return new WaitForSeconds(card.Length > 40 ? 6f : 3.6f);
                 hud.HideCard();
                 yield return new WaitForSeconds(1.4f);
             }
-            // The drone's eye opens close to the survivor's face.
-            drone.Snap();
-            yield return Tween(4f, k =>
+            // Inside the pod: the survivor's own eyes, looking out through the frost at a light.
+            Vector3 stand = traveller.transform.position;
+            Vector3 facing = Flat(traveller.Facing).normalized;
+            Vector3 eyes = stand + Vector3.up * 1.62f;
+            follow.Shot(eyes - facing * 0.05f, eyes + facing * 4f + Vector3.down * 0.2f, 60f);
+            drone.GoTo = stand + facing * 1.6f + Vector3.up * 1.45f + Vector3.Cross(Vector3.up, facing) * 0.3f;
+            drone.LookAt = eyes;
+            drone.transform.position = drone.GoTo.Value;
+            hud.Frost(1f);
+            yield return Tween(3.5f, k =>
             {
                 hud.Black = 1f - k * k * (3f - 2f * k);
-                if (ambience) ambience.volume = ambienceVolume * k;
-                if (wind) wind.volume = windVolume * k;
+                if (ambience) ambience.volume = ambienceVolume * 0.5f * k;
             });
-            follow.Scripted = false;
+            yield return new WaitForSeconds(0.8f);
+            // The beam cuts round the seal of the glass.
+            if (steps && crackClip) steps.PlayOneShot(crackClip, 0.7f);
+            Vector3 lidCentre = podLid ? podLid.position + podLid.right * 0.55f : eyes + facing * 0.3f;
+            for (float t = 0f; t < 2.4f; t += Time.deltaTime)
+            {
+                float a = t / 2.4f * Mathf.PI * 2f;
+                Vector3 seam = lidCentre + facing * 0.15f + Vector3.up * Mathf.Sin(a) * 1.05f + Vector3.Cross(Vector3.up, facing) * Mathf.Cos(a) * 0.48f;
+                drone.Beam(seam);
+                if (UnityEngine.Random.value < 0.25f) Fx.Sparks(seam, 3, new Color(1f, 0.75f, 0.45f));
+                yield return null;
+            }
+            drone.Beam(null);
+            // The lid gives and swings open; cold air.
+            if (steps && crackClip) steps.PlayOneShot(crackClip, 1f);
+            if (podLid)
+            {
+                var shut = podLid.localRotation;
+                StartCoroutine(Tween(1.4f, k => podLid.localRotation = shut * Quaternion.Euler(0f, -115f * Mathf.SmoothStep(0f, 1f, k), 0f)));
+            }
+            StartCoroutine(Tween(1.6f, k => hud.Frost(1f - k)));
+            yield return new WaitForSeconds(1f);
             if (music && music.clip)
             {
                 music.volume = 0f;
@@ -403,21 +449,44 @@ namespace Game
                 StartCoroutine(Tween(10f, k => music.volume = musicVolume * k));
             }
             drone.Listening = true;
-            yield return Speak("You're awake. Good. I wasn't sure you would be.", "HAPPY");
-            yield return Speak($"I'm {droneName}. The one who made me left me to watch the vault.", "CALM");
-            yield return Speak("The cold got in. The others won't wake unless the valley is warm again.", "SAD");
+            yield return Speak("There you are. Don't move too fast. Your blood's been cold for a very long time.", "WORRIED");
+            // Back to the shoulder: they step out of the pod.
+            follow.EndShot();
+            follow.Face(Mathf.Atan2(facing.x, facing.z) * Mathf.Rad2Deg, 8f);
+            follow.Scripted = false;
+            drone.Release();
+            traveller.Drive = new Vector2(0f, 0.6f);
+            yield return new WaitForSeconds(1.1f);
+            traveller.Drive = Vector2.zero;
+            if (ambience) StartCoroutine(Tween(3f, k => ambience.volume = ambienceVolume * (0.5f + 0.5f * k)));
+            yield return Speak("I'm Spark. I heard your pod crack from three rooms away.", "CALM");
             traveller.Scripted = false;
             arrived = true;
-            yield return Speak("The old sun mirror on the cliff could warm it. Its heart is gone, but the station across the chasm kept spares.", "SURE");
             stage = Stage.Cross;
-            ShowGoal();
-            yield return Speak("Talk to me. Ask me anything, or tell me what to make.", "CALM");
+            yield return Speak("Do you have a name? Your label's frosted over.", "CURIOUS");
             hud.ShowHint("[Q] hold and speak   [Tab] write   [W A S D] walk   [Mouse] look");
             quietSince = Time.time;
-            while (lines == 0 && Time.time - quietSince < 25f) yield return null;
-            if (lines == 0) yield return Speak("Ask me how to cross, if you like. I'll think of something.", "CALM");
-            while (lines == 0) yield return null;
+            while (lines == 0 && Time.time - quietSince < 30f) yield return null;
             hud.HideHint();
+        }
+
+        /// <summary>At the vault door from inside: Spark opens it, and the world is there.</summary>
+        IEnumerator OpenVault()
+        {
+            yield return Speak("Stay close. I'll show you what's left.", "SURE");
+            drone.GoTo = vaultDoor ? vaultDoor.position + Vector3.up * 0.4f + vaultDoor.forward * -1.2f : drone.transform.position;
+            drone.LookAt = vaultDoor ? vaultDoor.position : traveller.transform.position;
+            yield return new WaitForSeconds(0.8f);
+            if (vaultDoor)
+            {
+                drone.Beam(vaultDoor.position + vaultDoor.right * 1.75f);
+                if (steps && openClip) steps.PlayOneShot(openClip, 0.9f);
+                var shut = vaultDoor.localRotation;
+                yield return Tween(3f, k => vaultDoor.localRotation = shut * Quaternion.Euler(0f, -100f * Mathf.SmoothStep(0f, 1f, k), 0f));
+                drone.Beam(null);
+            }
+            doorOpen = true;
+            drone.Release();
         }
 
         // ---- Lines in, turns out ----
@@ -797,6 +866,15 @@ namespace Game
             {
                 yield return new WaitForSeconds(0.25f);
                 Vector3 p = traveller.transform.position;
+                if (!doorOpen && vaultDoor && Vector3.Distance(p, vaultDoor.position) < 6f) Beat("vault door", OpenVault);
+                if (doorOpen && vaultDoor && p.z > vaultDoor.position.z + 3f && !told.Contains("outside"))
+                {
+                    Beat("outside", Line("That's the sun. What's left of it. The great minds put it in a cage.", "SAD"),
+                        Line("The mirror on the cliff, far off, could warm the vault again and wake them. But a Harvester took its heart.", "WORRIED"));
+                    ShowGoal();
+                }
+                if (p.z > 28f && p.z < 110f && Mathf.Abs(p.x) < 60f)
+                    Beat("town", Line("This was Ima's town. Twelve thousand people. Ask me what it looked like, if you want. I remember.", "SAD"));
                 if (stage == Stage.Cross && farSide && farSide.bounds.Contains(p))
                 {
                     stage = Stage.Enter;
