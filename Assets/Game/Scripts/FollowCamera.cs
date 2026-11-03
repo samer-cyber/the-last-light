@@ -131,6 +131,30 @@ namespace Game
             transform.SetPositionAndRotation(position, turn);
         }
 
+        /// <summary>The view as the player sees it, without the words on the screen: a JPEG.</summary>
+        public byte[] Capture(int width, int height)
+        {
+            var target = RenderTexture.GetTemporary(width, height, 24, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB);
+            var request = new UnityEngine.Rendering.RenderPipeline.StandardRequest { destination = target };
+            if (UnityEngine.Rendering.RenderPipeline.SupportsRenderRequest(view, request)) UnityEngine.Rendering.RenderPipeline.SubmitRenderRequest(view, request);
+            else
+            {
+                view.targetTexture = target;
+                view.Render();
+                view.targetTexture = null;
+            }
+            var picture = new Texture2D(width, height, TextureFormat.RGB24, false);
+            var previous = RenderTexture.active;
+            RenderTexture.active = target;
+            picture.ReadPixels(new Rect(0, 0, width, height), 0, 0, false);
+            picture.Apply(false);
+            RenderTexture.active = previous;
+            RenderTexture.ReleaseTemporary(target);
+            byte[] jpeg = picture.EncodeToJPG(88);
+            Destroy(picture);
+            return jpeg;
+        }
+
         public void Lock(bool locked)
         {
             Cursor.lockState = locked ? CursorLockMode.Locked : CursorLockMode.None;

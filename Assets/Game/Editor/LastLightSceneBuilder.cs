@@ -344,17 +344,45 @@ namespace Game.Building
             var maker = makerObject.AddComponent<Maker>();
             Wire(maker, ("cube", cube), ("cylinder", cylinder), ("sphere", ball), ("ghost", ghost), ("flame", flame),
                 ("slippery", slippery), ("bouncy", bouncy), ("sound", makerSound), ("doneClip", FindClip("build_complete_1")), ("apartClip", FindClip("build_apart_1")),
-                ("planClip", FindClip("build_plan_1")), ("boingClip", FindClip("spring_boing")), ("liftClip", FindClip("lift_loop")), ("fireClip", FindClip("fire_loop")));
+                ("planClip", FindClip("build_plan_1")), ("boingClip", FindClip("spring_boing")), ("liftClip", FindClip("lift_loop")), ("fireClip", FindClip("fire_loop")),
+                ("swingClip", FindClip("blade_swing")), ("boltClip", FindClip("bolt_fire")));
             WireArray(maker, "looks", looks);
             WireArray(maker, "lockClips", new[] { "build_lock_stone_1", "build_lock_metal_1", "build_lock_ice_1", "build_lock_ice_2", "build_lock_stone_2", "build_plan_2" }.Select(n => (Object)FindClip(n)).ToArray());
             SetMask(maker, "ground", notPicked);
+
+            // Spark's holograms (Muse Image), projected from its eye or laid over the view.
+            var hologramMaterial = MakeMaterial("Hologram", "Game/Hologram", m =>
+            {
+                m.SetColor("_Tint", new Color(0.45f, 0.9f, 1f));
+                m.SetFloat("_Colour", 0.35f);
+                m.SetFloat("_Intensity", 1.6f);
+            });
+            var hologram = new GameObject("Hologram").AddComponent<Hologram>();
+            Wire(hologram, ("material", hologramMaterial), ("lineMaterial", beamLine), ("sound", makerSound), ("onClip", FindClip("hologram_on") ?? FindClip("build_plan_1")));
+
+            // The survivor's warmth (their health), and what the machines smell.
+            var warmth = travellerObject.AddComponent<Warmth>();
+            Wire(warmth, ("traveller", traveller), ("follow", follow), ("hud", hud), ("sound", handsSound),
+                ("hitClip", FindClip("survivor_hit")), ("blockClip", FindClip("shield_block")));
+            var smell = travellerObject.AddComponent<HeatSource>();
+            smell.IsSurvivor = true;
+            smell.Pull = 1f;
+
+            // The great minds' machines, made when the story calls for them.
+            var machineShell = MakeLit("Machine Shell", new Color(0.045f, 0.045f, 0.055f), 0.72f, 0.85f);
+            var machineEye = MakeMaterial("Machine Eye", "Universal Render Pipeline/Unlit", m => m.SetColor("_BaseColor", new Color(3f, 0.35f, 0.2f)));
+            var sparkMaterial = MakeParticleMaterial("Spark", softDot, 3f);
+            var machines = new GameObject("Machines").AddComponent<Machines>();
+            Wire(machines, ("shell", machineShell), ("eyeGlow", machineEye), ("fin", joint), ("line", beamLine), ("spark", sparkMaterial), ("charge", light),
+                ("humClip", FindClip("seeker_hum_loop")), ("fireClip", FindClip("seeker_fire")), ("chargeClip", FindClip("seeker_charge")),
+                ("hurtClip", FindClip("seeker_hurt")), ("breakClip", FindClip("seeker_break")));
 
             var mind = new GameObject("Mind").AddComponent<Mind>();
             Wire(mind, ("card", Load<TextAsset>($"{Root}/Story/Drone card.txt")));
 
             var director = new GameObject("Director").AddComponent<LastLightDirector>();
             Wire(director, ("traveller", traveller), ("follow", follow), ("body", body), ("drone", drone), ("maker", maker), ("mind", mind),
-                ("say", say), ("talk", talk), ("hud", hud), ("gate", station.Gate), ("heartCase", station.Case), ("heart", station.Heart),
+                ("say", say), ("talk", talk), ("hud", hud), ("hologram", hologram), ("warmth", warmth), ("machines", machines), ("gate", station.Gate), ("heartCase", station.Case), ("heart", station.Heart),
                 ("inside", station.Inside), ("farSide", farRegion), ("mirrorJoint", mirrorParts.Joint), ("socket", mirrorParts.Socket), ("mirror", mirrorParts.Mirror),
                 ("sunlight", sunlight), ("vaultLight", vaultLight), ("vaultDoor", vaultDoor), ("snow", snow),
                 ("ambience", ambience), ("wind", windSource), ("music", music), ("steps", stepsSource), ("finaleClip", FindClip("finale_2")),
@@ -363,6 +391,17 @@ namespace Game.Building
             WireArray(director, "snowSteps", Clips("foley_step_snow", 6));
             WireArray(director, "stoneSteps", Clips("foley_step_stone", 6));
             WireArray(director, "iceSteps", Clips("foley_step_ice", 6));
+
+            // Everything solid in the world can be stood on and kept out of: a collider for each shape that has none
+            // (light, glow, writing and windows are not solid; moving things have their own).
+            foreach (var r in world.GetComponentsInChildren<MeshRenderer>(true))
+            {
+                if (r.GetComponent<Collider>() || r.GetComponentInParent<Rigidbody>()) continue;
+                string n = r.name;
+                if (new[] { "Glow", "Beam", "Shaft", "Writing", "Light Line", "Window", "Band", "Flame", "Ghost", "Face" }.Any(n.Contains)) continue;
+                var filter = r.GetComponent<MeshFilter>();
+                if (filter && filter.sharedMesh) r.gameObject.AddComponent<MeshCollider>().sharedMesh = filter.sharedMesh;
+            }
 
             EditorSceneManager.SaveScene(scene, ScenePath);
             // The Last Light is the game now: first in the build; the old scenes follow, unreached.

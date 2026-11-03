@@ -99,6 +99,64 @@ namespace Game
             done(words.ToString(), null);
         }
 
+        /// <summary>
+        /// A picture from Muse Image: drawn from the words, or, given a picture, that picture changed as
+        /// the words say (the same view in another time). Calls back with JPEG bytes, or null and the reason.
+        /// </summary>
+        public static IEnumerator Image(string prompt, byte[] picture, string size, float timeout, Action<byte[], string> done)
+        {
+            string key = Secrets.Get(KeyName);
+            if (key == null)
+            {
+                done(null, "no " + KeyName);
+                yield break;
+            }
+            var body = new StringBuilder("{\"model\":\"muse-image-1.0\",\"n\":1,\"output_format\":\"jpeg\",\"reasoning_strength\":\"low\",");
+            body.Append("\"size\":").Append(Quote(size)).Append(',');
+            body.Append("\"tool_enablement\":{\"enable_image_search\":false,\"enable_web_search\":false,\"enable_shell\":false},");
+            if (picture != null) body.Append("\"images\":[{\"image_url\":\"data:image/jpeg;base64,").Append(Convert.ToBase64String(picture)).Append("\"}],");
+            body.Append("\"prompt\":").Append(Quote(prompt)).Append('}');
+            using var request = new UnityWebRequest(Base + (picture != null ? "/images/edits" : "/images/generations"), "POST")
+            {
+                uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body.ToString())),
+                downloadHandler = new DownloadHandlerBuffer(),
+                timeout = Mathf.CeilToInt(timeout),
+            };
+            request.SetRequestHeader("Content-Type", "application/json");
+            request.SetRequestHeader("Authorization", "Bearer " + key);
+            yield return request.SendWebRequest();
+            if (request.result != UnityWebRequest.Result.Success)
+            {
+                done(null, Failure(request));
+                yield break;
+            }
+            ImageReply reply = null;
+            try { reply = JsonUtility.FromJson<ImageReply>(request.downloadHandler.text); }
+            catch (ArgumentException) { }
+            string b64 = reply?.data != null && reply.data.Length > 0 ? reply.data[0].b64_json : null;
+            if (string.IsNullOrEmpty(b64))
+            {
+                string url = reply?.data != null && reply.data.Length > 0 ? reply.data[0].url : null;
+                if (string.IsNullOrEmpty(url))
+                {
+                    done(null, "the reply had no picture");
+                    yield break;
+                }
+                using var fetch = UnityWebRequest.Get(url);
+                fetch.timeout = 30;
+                yield return fetch.SendWebRequest();
+                done(fetch.result == UnityWebRequest.Result.Success ? fetch.downloadHandler.data : null, fetch.result == UnityWebRequest.Result.Success ? null : Failure(fetch));
+                yield break;
+            }
+            byte[] bytes = null;
+            try { bytes = Convert.FromBase64String(b64); }
+            catch (FormatException) { }
+            done(bytes, bytes == null ? "the picture was unreadable" : null);
+        }
+
+        [Serializable] class ImageReply { public ImageItem[] data; }
+        [Serializable] class ImageItem { public string b64_json; public string url; }
+
         /// <summary>A string as a JSON literal, quotes included.</summary>
         public static string Quote(string text)
         {

@@ -284,7 +284,7 @@
     position: absolute;
     right: 36px;
     top: 34px;
-    width: 400px;
+    width: 480px;
     padding: 8px 8px 10px 8px;
     background-color: rgba(10, 10, 14, 0.6);
     border-width: 1px;
@@ -309,8 +309,8 @@
 }
 
 .hud__photo-image {
-    width: 384px;
-    height: 216px;
+    width: 464px;
+    height: 261px;
     -unity-background-scale-mode: scale-and-crop;
 }
 
@@ -369,4 +369,211 @@
 
 .hud__card--shown {
     opacity: 1;
+}
+
+/* Spark's hologram of the past, over the whole view, with scan lines. */
+
+.hud__hologram {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    -unity-background-scale-mode: scale-and-crop;
+    -unity-background-image-tint-color: rgb(225, 245, 255);
+    opacity: 0;
+}
+
+.hud__scanlines {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    background-repeat: repeat repeat;
+    background-size: 4px 4px;
+    opacity: 0;
+}
+
+/* What was earned, high in the middle. */
+
+.hud__honour {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 110px;
+    align-items: center;
+    opacity: 0;
+    translate: 0 -12px;
+    transition-property: opacity, translate;
+    transition-duration: 0.8s, 0.8s;
+}
+
+.hud__honour--shown {
+    opacity: 1;
+    translate: 0 0;
+}
+
+.hud__honour-title {
+    font-size: 30px;
+    letter-spacing: 10px;
+    color: rgb(255, 205, 140);
+    text-shadow: 0 0 18px rgba(255, 150, 60, 0.8);
+    padding: 10px 26px 4px 26px;
+    border-top-width: 1px;
+    border-bottom-width: 1px;
+    border-color: rgba(255, 196, 140, 0.55);
+}
+
+.hud__honour-line {
+    margin-top: 8px;
+    font-size: 18px;
+    letter-spacing: 2px;
+    color: rgba(250, 244, 236, 0.92);
+    text-shadow: 0 1px 8px rgba(0, 0, 0, 0.9);
+}
+
+/* Spark's trust, under the goal. */
+
+.hud__trust {
+    position: absolute;
+    left: 40px;
+    top: 102px;
+    flex-direction: row;
+    align-items: center;
+    opacity: 0;
+    transition-property: opacity;
+    transition-duration: 1.2s;
+}
+
+.hud__trust--shown {
+    opacity: 1;
+}
+
+.hud__trust-pips {
+    flex-direction: row;
+}
+
+.hud__trust-pip {
+    width: 14px;
+    height: 6px;
+    margin-right: 4px;
+    border-width: 1px;
+    border-color: rgba(255, 196, 140, 0.6);
+    background-color: rgba(0, 0, 0, 0.25);
+}
+
+.hud__trust-pip--on {
+    background-color: rgb(255, 186, 110);
+}
+
+.hud__trust-words {
+    margin-left: 10px;
+    font-size: 13px;
+    letter-spacing: 3px;
+    color: rgba(255, 220, 180, 0.85);
+    text-shadow: 0 1px 6px rgba(0, 0, 0, 0.9);
+}
+
+/* How warm the survivor is: a thin bar low in the middle, only when not full. */
+
+.hud__warmth {
+    position: absolute;
+    left: 38%;
+    bottom: 64px;
+    height: 5px;
+    width: 24%;
+    background-color: rgb(255, 170, 90);
+    border-radius: 2px;
+    transition-property: opacity, background-color;
+    transition-duration: 0.4s, 0.4s;
+}
+
+.hud__warmth--low {
+    background-color: rgb(140, 200, 255);
+}
+
+/* Spark's log, on the right, [L] to open. */
+
+.hud__log {
+    position: absolute;
+    right: 36px;
+    top: 300px;
+    width: 440px;
+    padding: 14px 18px 16px 18px;
+    background-color: rgba(8, 9, 12, 0.82);
+    border-left-width: 2px;
+    border-color: rgba(255, 186, 110, 0.7);
+    opacity: 0;
+    translate: 20px 0;
+    transition-property: opacity, translate;
+    transition-duration: 0.35s, 0.35s;
+}
+
+.hud__log--shown {
+    opacity: 1;
+    translate: 0 0;
+}
+
+.hud__log-head {
+    font-size: 13px;
+    letter-spacing: 6px;
+    color: rgb(255, 186, 110);
+    margin-bottom: 10px;
+}
+
+.hud__log-row {
+    margin-bottom: 10px;
+}
+
+.hud__log-when {
+    font-size: 11px;
+    letter-spacing: 3px;
+    color: rgba(255, 196, 140, 0.7);
+}
+
+.hud__log-entry {
+    font-size: 16px;
+    color: rgba(245, 240, 232, 0.95);
+    white-space: normal;
+}
+
+/* The eye's picture: a viewfinder. */
+
+.hud__photo-corner {
+    position: absolute;
+    width: 18px;
+    height: 18px;
+    border-color: rgba(255, 255, 255, 0.85);
+}
+
+.hud__photo-corner--tl { left: 8px; top: 8px; border-left-width: 2px; border-top-width: 2px; }
+.hud__photo-corner--tr { right: 8px; top: 8px; border-right-width: 2px; border-top-width: 2px; }
+.hud__photo-corner--bl { left: 8px; bottom: 8px; border-left-width: 2px; border-bottom-width: 2px; }
+.hud__photo-corner--br { right: 8px; bottom: 8px; border-right-width: 2px; border-bottom-width: 2px; }
+
+.hud__photo-rec {
+    position: absolute;
+    right: 14px;
+    top: 14px;
+    width: 9px;
+    height: 9px;
+    border-radius: 5px;
+    background-color: rgb(255, 60, 50);
+}
+
+/* Hit: the edges flash red. */
+
+.hud__hurt {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    border-width: 90px;
+    border-color: rgba(255, 40, 25, 0.45);
+    background-color: rgba(255, 40, 25, 0.08);
+    opacity: 0;
+    transition-property: opacity;
+    transition-duration: 0.35s;
 }

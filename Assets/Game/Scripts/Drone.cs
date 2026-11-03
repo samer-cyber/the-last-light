@@ -26,6 +26,9 @@ namespace Game
         [SerializeField] AudioSource hum;
         [SerializeField] AudioSource voice;
         [SerializeField] AudioClip moveClip;
+        [SerializeField, Tooltip("Speaks in words (ElevenLabs) rather than chirps, when it can.")] bool spoken = true;
+        [SerializeField, Range(0f, 1f)] float voiceVolume = 0.9f;
+        [SerializeField, Tooltip("Snow flung off the shell when it shakes.")] ParticleSystem snowOff;
         [SerializeField] Vector3 offset = new Vector3(0.8f, 1.95f, -0.2f);
         [SerializeField] Color warm = new Color(1f, 0.62f, 0.25f);
         [SerializeField, Tooltip("How far it will go from the survivor.")] float range = 40f;
@@ -49,17 +52,23 @@ namespace Game
         public bool Fallen { get; set; }
 
         Vector3 velocity, glowScale;
-        float think, open = 1f, speakingUntil, gestureAt = -10f, chirp;
-        string gesture = "";
+        float think, open = 1f, speakingUntil, gestureAt = -10f, chirp, speakStart, moodUntil;
+        float[] envelope;
+        string gesture = "", mood = "CALM";
+        Color moodColour;
         Material irisMaterial;
         float shineIntensity;
         static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
         static readonly int IntensityId = Shader.PropertyToID("_Intensity");
         static readonly int ColorId = Shader.PropertyToID("_Color");
 
+        /// <summary>How it feels now (it eases back to calm a while after a line).</summary>
+        public string Mood => moodUntil > Time.time ? mood : "CALM";
+
         void Awake()
         {
             Colour = warm;
+            moodColour = warm;
             irisMaterial = irisRenderer ? irisRenderer.material : null;
             shineIntensity = shine ? shine.intensity : 1f;
             if (glow) glowScale = glow.transform.localScale;
@@ -75,8 +84,17 @@ namespace Game
             velocity = Vector3.zero;
         }
 
+        /// <summary>A machine is near: it keeps the survivor between itself and the machine.</summary>
+        public Vector3? Cover { get; set; }
+
         Vector3 Home()
         {
+            if (Cover.HasValue)
+            {
+                Vector3 away = Flat(traveller.transform.position - Cover.Value);
+                away = away.sqrMagnitude > 0.01f ? away.normalized : Vector3.back;
+                return traveller.transform.position + away * 0.75f + Vector3.Cross(Vector3.up, away) * 0.35f + Vector3.up * 1.45f;
+            }
             var facing = travellerBody ? Quaternion.Euler(0f, travellerBody.eulerAngles.y, 0f) : Quaternion.identity;
             return traveller.transform.position + facing * offset;
         }
@@ -104,6 +122,12 @@ namespace Game
             float t = Time.time;
             target += new Vector3(Mathf.Sin(t * 0.9f) * 0.03f, Mathf.Sin(t * 1.7f) * 0.06f, 0f);
             if (gesture == "DROOP" && Time.time - gestureAt < 2.2f) target += Vector3.down * 0.18f;
+            if (gesture == "BACK" && Time.time - gestureAt < 3.5f && !GoTo.HasValue)
+            {
+                // Away from the survivor, a little higher: out of reach.
+                Vector3 away = Flat(transform.position - traveller.transform.position);
+                target += (away.sqrMagnitude > 0.01f ? away.normalized : Vector3.back) * 1.6f + Vector3.up * 0.5f;
+            }
             if (gesture == "BOUNCE") target += Vector3.up * Mathf.Abs(Mathf.Sin((Time.time - gestureAt) * 9f)) * 0.14f * Mathf.Clamp01(1.2f - (Time.time - gestureAt));
             // Far errands are flown fast; close by it drifts.
             float speed = GoTo.HasValue ? Mathf.Clamp(Vector3.Distance(transform.position, target) * 0.9f, 9f, 24f) : 7f;
@@ -120,8 +144,24 @@ namespace Game
 
             // The iris: wide to listen, narrow and turning to think, pulsing with its chirps.
             think = Mathf.MoveTowards(think, Thinking ? 1f : 0f, dt * 3f);
-            chirp = Speaking ? 0.5f + 0.5f * Mathf.Abs(Mathf.Sin(Time.time * 19f)) : Mathf.MoveTowards(chirp, 0f, dt * 4f);
-            float wanted = Listening ? 1.25f + Level * 0.35f : Thinking ? 0.7f : 1f;
+            if (Speaking && envelope != null && envelope.Length > 0)
+            {
+                int at = Mathf.Clamp((int)((Time.time - speakStart) * 60f), 0, envelope.Length - 1);
+                chirp = Mathf.Lerp(chirp, envelope[at], 1f - Mathf.Exp(-30f * dt));
+            }
+            else chirp = Speaking ? 0.5f + 0.5f * Mathf.Abs(Mathf.Sin(Time.time * 19f)) : Mathf.MoveTowards(chirp, 0f, dt * 4f);
+            // The eye's colour follows the mood: pale when frightened, red when angry, dim blue when sad.
+            Color wantColour = Mood switch
+            {
+                "SCARED" => new Color(0.75f, 0.85f, 1f),
+                "ANGRY" => new Color(1f, 0.22f, 0.12f),
+                "SAD" or "HURT" => new Color(0.45f, 0.62f, 1f),
+                "HAPPY" or "PLAYFUL" => new Color(1f, 0.78f, 0.32f),
+                _ => Colour,
+            };
+            if (Colour != warm) wantColour = Colour;
+            moodColour = Color.Lerp(moodColour, wantColour, 1f - Mathf.Exp(-3f * dt));
+            float wanted = Listening ? 1.25f + Level * 0.35f : Thinking ? 0.7f : Mood == "SCARED" || Cover.HasValue ? 0.6f : Mood == "ANGRY" ? 0.75f : 1f;
             open = Mathf.Lerp(open, wanted, 1f - Mathf.Exp(-8f * dt));
             if (iris)
             {
@@ -130,20 +170,20 @@ namespace Game
             }
             float flicker = think * (0.15f * Mathf.Sin(Time.time * 23f));
             float strength = Brightness * (1f + 0.35f * chirp + flicker + (Listening ? 0.2f + Level * 0.6f : 0f));
-            if (irisMaterial) irisMaterial.SetColor(BaseColorId, Colour * (2.2f * strength));
+            if (irisMaterial) irisMaterial.SetColor(BaseColorId, moodColour * (2.2f * strength));
             if (glow)
             {
                 glow.transform.localScale = glowScale * (0.8f + 0.3f * strength);
                 var block = new MaterialPropertyBlock();
                 glow.GetPropertyBlock(block);
                 block.SetFloat(IntensityId, 0.5f * strength);
-                block.SetColor(ColorId, Colour);
+                block.SetColor(ColorId, moodColour);
                 glow.SetPropertyBlock(block);
             }
             if (shine)
             {
                 shine.intensity = shineIntensity * strength;
-                shine.color = Colour;
+                shine.color = moodColour;
             }
             if (hum)
             {
@@ -172,16 +212,36 @@ namespace Game
         /// <summary>A small motion for how it feels.</summary>
         public void Feel(string mood)
         {
+            this.mood = mood;
+            moodUntil = Time.time + (mood is "SCARED" or "ANGRY" or "HURT" or "SAD" ? 40f : 15f);
             gesture = mood switch
             {
                 "HAPPY" => Random.value < 0.5f ? "SPIN" : "BOUNCE",
-                "SAD" => "DROOP",
+                "PLAYFUL" => "SPIN",
+                "SAD" or "HURT" => "DROOP",
                 "SORRY" => "SHAKE",
                 "SURE" => "NOD",
                 "CURIOUS" => "TILT",
                 "WORRIED" => "SHIVER",
+                "SCARED" => "BACK",
+                "ANGRY" => "SNAP",
                 _ => "",
             };
+            gestureAt = Time.time;
+        }
+
+        /// <summary>Shakes the snow off its shell, like a dog out of water.</summary>
+        public void ShakeOffSnow()
+        {
+            gesture = "WET";
+            gestureAt = Time.time;
+            if (snowOff) snowOff.Play();
+        }
+
+        /// <summary>Backs off out of reach, frightened.</summary>
+        public void BackAway()
+        {
+            gesture = "BACK";
             gestureAt = Time.time;
         }
 
@@ -199,6 +259,9 @@ namespace Game
                 case "SPIN" when age < 0.8f: return Quaternion.Euler(0f, 0f, 360f * Mathf.SmoothStep(0f, 1f, age / 0.8f));
                 case "DROOP" when age < 2.2f: return Quaternion.Euler(24f * Mathf.Sin(Mathf.Clamp01(age / 2.2f) * Mathf.PI), 0f, 0f);
                 case "SHIVER" when age < 1f: return Quaternion.Euler(0f, Mathf.Sin(age * 60f) * 4f, Mathf.Sin(age * 53f) * 3f);
+                case "BACK" when age < 3.5f: return Quaternion.Euler(-10f * Mathf.Clamp01(age * 3f), Mathf.Sin(age * 50f) * 3f * (1f - age / 3.5f), 0f);
+                case "SNAP" when age < 0.7f: return Quaternion.Euler(-14f * Mathf.Sin(age / 0.7f * Mathf.PI), Mathf.Sin(age * 30f) * 10f * (1f - age / 0.7f), 0f);
+                case "WET" when age < 1.1f: return Quaternion.Euler(0f, 0f, Mathf.Sin(age * 38f) * 32f * (1f - age / 1.1f));
                 default: return Quaternion.identity;
             }
         }
@@ -207,14 +270,19 @@ namespace Game
         public IEnumerator Speak(string line, string mood, Hud hud, string name)
         {
             if (string.IsNullOrWhiteSpace(line)) yield break;
-            var clip = DroneVoice.Chirps(line, mood);
+            AudioClip clip = null;
+            if (spoken) yield return SparkVoice.Clip(line, mood, 8f, c => clip = c);
+            bool chirps = !clip;
+            if (chirps) clip = DroneVoice.Chirps(line, mood);
+            envelope = chirps ? null : SparkVoice.Envelope(clip);
             float seconds = clip.length;
             Feel(mood);
             if (voice)
             {
                 voice.pitch = 1f;
-                voice.PlayOneShot(clip, 0.75f);
+                voice.PlayOneShot(clip, chirps ? 0.75f : voiceVolume);
             }
+            speakStart = Time.time;
             speakingUntil = Time.time + seconds;
             for (float t = 0f; t < seconds; t += Time.deltaTime)
             {

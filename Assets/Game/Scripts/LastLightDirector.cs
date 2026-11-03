@@ -59,8 +59,11 @@ namespace Game
         [SerializeField] AudioClip[] iceSteps;
         [SerializeField] AudioClip jumpClip;
         [SerializeField] AudioClip landClip;
-        [SerializeField] string droneName = "Wick";
-        [SerializeField, Tooltip("Seconds without progress or a word before the drone offers an idea.")] float ideaAfter = 50f;
+        [SerializeField] Hologram hologram;
+        [SerializeField] Warmth warmth;
+        [SerializeField] Machines machines;
+        [SerializeField] string droneName = "Spark";
+        [SerializeField, Tooltip("Seconds without progress or a word before the drone offers an idea; it waits twice as long after each one.")] float ideaAfter = 60f;
 
         const string Goal = "Bring the light back to the vault";
 
@@ -69,11 +72,105 @@ namespace Game
         readonly List<(string who, string words)> recent = new List<(string, string)>();
         readonly List<string> remembered = new List<string>();
         readonly HashSet<string> told = new HashSet<string>();
+        readonly List<string> offered = new List<string>();
+        float hitBarkAt = -100f;
+        int broken;
+
+        /// <summary>
+        /// Spark's quick lines: said at once, from a voice made ahead of time, when the moment is too
+        /// fast to think (a first sighting, a hit). Written in its voice, said once each, or seldom.
+        /// </summary>
+        static readonly Dictionary<string, (string line, string mood)> Barks = new Dictionary<string, (string, string)>
+        {
+            ["seekers"] = ("Seekers. Don't move. They see heat, not shapes, and you're the warmest thing for a mile.", "SCARED"),
+            ["hit"] = ("You're hit. Get behind something, or get near a fire.", "SCARED"),
+            ["first broken"] = ("You broke one. I've hidden from four thousand of those. I've never seen one fall.", "HAPPY"),
+            ["lured"] = ("It's going for the heat. Good. Let it.", "WORRIED"),
+            ["all broken"] = ("That's all of them. I think. Give me a second to stop shaking.", "SAD"),
+            ["fell"] = ("You went down. I pulled you back here. Please don't do that again.", "WORRIED"),
+            ["scan"] = ("Its eye. That's where it's thinnest. Hit it there.", "SURE"),
+        };
+
+        void Bark(string key, bool once = false)
+        {
+            if (once && !told.Add("bark " + key)) return;
+            if (!Barks.TryGetValue(key, out var b)) return;
+            // Quick lines go straight out, not behind a thought in progress.
+            StartCoroutine(Speak(b.line, b.mood));
+        }
+
+        /// <summary>Watches the machines: first sightings, lures, breaks; and keeps Spark behind the survivor while they hunt.</summary>
+        IEnumerator Fight()
+        {
+            var seen = new HashSet<Machine>();
+            while (!ended)
+            {
+                yield return new WaitForSeconds(0.2f);
+                if (!arrived) continue;
+                Machine threat = null;
+                float nearest = 30f;
+                foreach (var m in Machine.All.ToArray())
+                {
+                    if (!m || m.Broken) continue;
+                    float d = Vector3.Distance(m.transform.position, traveller.transform.position);
+                    if (seen.Add(m))
+                    {
+                        m.Broke += Broke;
+                    }
+                    if (m is Seeker s && s.Hunting)
+                    {
+                        if (d < 40f) Bark("seekers", true);
+                        if (!s.Prey.IsSurvivor && d < 40f) Bark("lured", true);
+                    }
+                    if (d < nearest) { nearest = d; threat = m; }
+                }
+                drone.Cover = threat ? threat.transform.position : (Vector3?)null;
+            }
+        }
+
+        void Broke(Machine m)
+        {
+            broken++;
+            bond.Event("seekers_beaten", broken == 1 ? 8 : 2, $"They broke {m.Title} while you watched", broken == 1 ? 7 : 3, Time.time);
+            if (broken == 1) Bark("first broken", true);
+            else if (!Machine.All.Any(x => x && !x.Broken && Vector3.Distance(x.transform.position, traveller.transform.position) < 60f)) Bark("all broken");
+        }
+
+        /// <summary>Out of warmth: white, then back on their feet by the start (or the last fire), Spark beside them.</summary>
+        IEnumerator Fell()
+        {
+            traveller.Scripted = true;
+            traveller.Release();
+            bond.Event("fell", 0, "They fell to the machines' fire and you pulled them back", 7, Time.time);
+            yield return Tween(1.2f, k => hud.White = k);
+            Vector3 back = lastFire ?? start;
+            traveller.Place(back, follow.Yaw);
+            drone.Snap();
+            foreach (var m in Machine.All)
+                if (m is Seeker s)
+                {
+                    s.Home(s.transform.position + (s.transform.position - back).normalized * 30f);
+                    s.Calm(15f);
+                }
+            yield return new WaitForSeconds(0.8f);
+            warmth.Restore(0.6f);
+            yield return Tween(1.5f, k => hud.White = 1f - k);
+            traveller.Scripted = false;
+            Bark("fell");
+        }
+
+        Vector3 start;
+        Vector3? lastFire;
         Stage stage = Stage.Wake;
         string survivorName = "";
-        bool arrived, handling, ended;
-        int lines;
+        bool arrived, handling, ended, logOpen, reflecting;
+        int lines, ideas;
         float quietSince;
+        string ideaStage;
+        Bond bond;
+
+        /// <summary>What Spark and the survivor have between them: trust, what happened, memories, its log.</summary>
+        public Bond Bond => bond;
         Coroutine arriving;
         string logPath;
         readonly System.Random random = new System.Random(17);
@@ -84,6 +181,29 @@ namespace Game
         void Start()
         {
             logPath = Path.Combine(Application.persistentDataPath, "last-light-log.jsonl");
+            start = traveller.transform.position;
+            bond = new Bond(Time.time);
+            bond.TierChanged += Tiered;
+            StartCoroutine(SparkVoice.Warm());
+            StartCoroutine(SparkVoice.Prefetch(Barks.Select(b => (b.Value.line, b.Value.mood))));
+            if (warmth)
+            {
+                warmth.Hurt += (amount, from) =>
+                {
+                    if (warmth.Value < 0.5f && Time.time - hitBarkAt > 25f)
+                    {
+                        hitBarkAt = Time.time;
+                        Bark("hit");
+                    }
+                };
+                warmth.Fell += () => StartCoroutine(Fell());
+            }
+            Distracting += at =>
+            {
+                foreach (var m in Machine.All)
+                    if (m is Seeker s && Vector3.Distance(s.transform.position, at) < 16f) s.Distract(drone.transform.position, 5f);
+            };
+            StartCoroutine(Fight());
             say.Said += words => waiting.Enqueue((words, false));
             say.Placeholder = "say something to " + droneName;
             talk.Spoken += wav => StartCoroutine(Hear(wav));
@@ -96,7 +216,14 @@ namespace Game
             if (gate) gate.Moved += open => { if (open) Beat("door", Line("The door's open!", "HAPPY")); };
             if (heartCase) heartCase.Freed += _ => Beat("heart free", Line("It's free. It's heavy, so you'll have to carry it. Pick it up with E.", "HAPPY"), () => Hint("[E] pick up the heart", 8f));
             if (mirrorJoint) mirrorJoint.Freed += _ => { Beat("joint free", Line("The joint's free. It can turn now.", "HAPPY")); Progress(); };
-            if (socket) socket.Filled += () => { Beat("socket", Line("The heart's in. I can feel it humming.", "HAPPY")); Progress(); };
+            if (socket) socket.Filled += () =>
+            {
+                // In, but the joint still frozen: the mirror tries to turn and can't, and says why.
+                if (mirrorJoint && !mirrorJoint.Free)
+                    Beat("socket", Grind, Line("Hear that? It's trying to turn. The joint's frozen solid. It needs heat, or a hard hit.", "WORRIED"));
+                else Beat("socket", Line("The heart's in. I can feel it humming.", "HAPPY"));
+                Progress();
+            };
             arriving = StartCoroutine(Arrive());
             StartCoroutine(Answering());
             StartCoroutine(Watch());
@@ -113,12 +240,57 @@ namespace Game
             var keys = Keyboard.current;
             if (keys == null) return;
             if (ended && keys.rKey.wasPressedThisFrame) SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+            if (arrived && !say.IsOpen && keys.lKey.wasPressedThisFrame) ShowLog(!logOpen);
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             if (keys.f1Key.wasPressedThisFrame && heartCase) heartCase.Strike();
             if (keys.f2Key.wasPressedThisFrame && mirrorJoint) mirrorJoint.Strike();
             if (keys.f3Key.wasPressedThisFrame && socket && heart) socket.Fill(heart);
             if (keys.f4Key.wasPressedThisFrame) End();
+            if (keys.f5Key.wasPressedThisFrame) bond.Set(Mathf.Min(100, (int)(bond.Level + 1) * 25 + 1));
+            if (keys.f6Key.wasPressedThisFrame && machines) Pack(3, 26f);
 #endif
+        }
+
+        /// <summary>A pack of Seekers ahead of the survivor, on patrol (tests, debug keys).</summary>
+        public void Pack(int count, float ahead)
+        {
+            Vector3 forward = Flat(follow.View.transform.forward).normalized;
+            Vector3 at = traveller.transform.position + forward * ahead;
+            if (maker.GroundAt(at, out float ground, 60f)) at.y = ground;
+            machines.Seekers(at, count, 6f);
+        }
+
+        /// <summary>Opens or closes Spark's log: its diary entries about the survivor.</summary>
+        public void ShowLog(bool open)
+        {
+            logOpen = open;
+            hud.Log(bond.Log.AsEnumerable().Reverse().Select(e => (When(e.at), e.entry)), open);
+        }
+
+        string When(float at)
+        {
+            float minutes = (at - bond.Met) / 60f;
+            return minutes < 1f ? "THE FIRST MINUTE" : $"MINUTE {Mathf.FloorToInt(minutes) + 1}";
+        }
+
+        /// <summary>Trust crossed into a new tier: it says so, and the screen marks what it means.</summary>
+        void Tiered(Bond.Tier tier, bool rose)
+        {
+            hud.Trust((int)tier, ("SPARK: " + Bond.TierNames[(int)tier]).ToUpperInvariant());
+            if (!arrived) return;
+            if (rose)
+            {
+                string meaning = tier switch
+                {
+                    Bond.Tier.Companion => "It will put tools in your hands",
+                    Bond.Tier.Partner => "It will make you shields, decoys and flares",
+                    Bond.Tier.Trusted => "It will make you weapons against the machines",
+                    _ => "",
+                };
+                hud.Honour("SPARK TRUSTS YOU", meaning);
+            }
+            else hud.Honour("SPARK TRUSTS YOU LESS", tier == Bond.Tier.Stranger ? "You're a stranger to it again" : "It is " + Bond.TierNames[(int)tier] + " now");
+            Log($"(trust {(rose ? "rose" : "fell")} to {tier})", false, $"trust {bond.Trust}", 0f, "game");
         }
 
         /// <summary>Asks as if the player had written it (tests use this).</summary>
@@ -247,13 +419,48 @@ namespace Game
             Vector3 lookAt = traveller.AimPoint ?? follow.View.transform.position + follow.View.transform.forward * 20f;
             byte[] picture = drone.Picture(lookAt);
             Turn turn = null;
-            yield return mind.Think(words, Moment(), ids.Keys.ToList(), picture, t => turn = t);
+            yield return mind.Think(words, Moment(words), ids.Keys.ToList(), picture, t => turn = t);
             drone.Thinking = false;
             Keep(turn);
             Remember("survivor", words);
             Remember("you", turn.Say);
+            // What it keeps of the line: the words, weighed by how much they mattered to it, and what it made of them.
+            bond.Remember($"They said \"{words}\"; you said \"{turn.Say}\"", turn.Importance, Time.time);
+            if (!string.IsNullOrWhiteSpace(turn.Remember)) bond.Remember("You learned: " + turn.Remember, Mathf.Min(10, turn.Importance + 1), Time.time);
+            bond.Nudge(turn.Trust, turn.TrustReason, Time.time);
+            // Asked for a weapon before it trusts them: it backs off, and remembers.
+            if (bond.Level < Bond.Tier.Trusted && Wants(words, "sword", "gun", "rifle", "sniper", "weapon", "blaster", "laser gun", "knife", "spear", "bow", "cannon", "axe"))
+            {
+                bond.Event("asked_weapon_early", 0, null, 0, Time.time);
+                if (turn.Steps.All(s => s.verb != "MAKE" || Bond.Needs(s.thing) <= bond.Level)) drone.BackAway();
+            }
             Log(words, spoken, Mind.Describe(turn), turn.Seconds, turn.Source);
             yield return Act(turn, ids, words, 0);
+            if (bond.WantsReflection && !reflecting) StartCoroutine(Reflect());
+        }
+
+        static bool Wants(string words, params string[] keys)
+        {
+            string text = " " + words.ToLowerInvariant() + " ";
+            return keys.Any(k => text.Contains(" " + k));
+        }
+
+        /// <summary>Spark writes in its log, in the background: what it thinks of the survivor now.</summary>
+        IEnumerator Reflect()
+        {
+            reflecting = true;
+            string lately = bond.Lately(Time.time);
+            string entry = null;
+            float began = Time.realtimeSinceStartup;
+            yield return mind.Reflect(lately, Moment(""), e => entry = e);
+            if (entry != null)
+            {
+                bond.Write(entry, Time.time);
+                Log("(log)", false, entry, Time.realtimeSinceStartup - began, mind.Model);
+                hud.Note("Spark wrote in its log   [L] read", 4f);
+                if (logOpen) ShowLog(true);
+            }
+            reflecting = false;
         }
 
         /// <summary>Says the turn's words and does its steps, in order. A look sends a second picture, and its answer is acted on too.</summary>
@@ -286,11 +493,73 @@ namespace Game
                     case "COME":
                         drone.Release();
                         break;
+                    case "SHOW":
+                    case "SHOW_HERE":
+                        yield return speaking;
+                        yield return Show(step);
+                        break;
+                    case "DISTRACT":
+                        yield return Distract(step, ids);
+                        break;
                 }
             }
             yield return speaking;
             if (!waitHere) drone.Release();
         }
+
+        /// <summary>
+        /// A hologram from its archive (Muse Image): a picture from the words, or the survivor's own view
+        /// redrawn as it was (SHOW_HERE), laid over the world.
+        /// </summary>
+        IEnumerator Show(Step step)
+        {
+            if (!hologram || hologram.Busy || string.IsNullOrWhiteSpace(step.picture)) yield break;
+            byte[] view = null;
+            if (step.verb == "SHOW_HERE")
+            {
+                // The survivor's view as it is, without the screen's words, and held still while it is shown.
+                view = follow.Capture(1536, 864);
+                follow.Scripted = true;
+            }
+            string failed = null;
+            bool shown = false;
+            var showing = StartCoroutine(hologram.Show(step.picture, view, drone, traveller.transform, follow.View.transform, hud, e => { failed = e; shown = e == null; }));
+            hud.Note(view != null ? "SPARK'S ARCHIVE   ·   searching for this place" : "SPARK'S ARCHIVE   ·   searching", 12f);
+            while (!shown && failed == null) yield return null;
+            if (failed != null)
+            {
+                follow.Scripted = false;
+                yield return Speak("My archive's gone quiet. I can't find it.", "SORRY");
+                yield break;
+            }
+            hud.Note(view != null ? "SPARK'S ARCHIVE   ·   this place, before the cold" : "SPARK'S ARCHIVE", 6f);
+            bond.Remember($"You showed them a hologram: {step.picture}", 4, Time.time);
+            while (hologram.Showing && view != null) yield return null;
+            if (view != null) follow.Scripted = false;
+            yield return showing;
+        }
+
+        /// <summary>Flies at a machine to draw its attention, darting round it for a few seconds, then back.</summary>
+        IEnumerator Distract(Step step, Dictionary<string, Vector3> ids)
+        {
+            Vector3 at = Place(ids, step.target, "AIM");
+            if (Vector3.Distance(at, traveller.transform.position) > drone.Range)
+            {
+                yield return Speak("Too far. I'd never make it back.", "SCARED");
+                yield break;
+            }
+            Distracting?.Invoke(at);
+            for (float t = 0f; t < 5f; t += Time.deltaTime)
+            {
+                drone.GoTo = at + new Vector3(Mathf.Sin(t * 2.6f) * 3.5f, 2.5f + Mathf.Sin(t * 5.1f) * 0.8f, Mathf.Cos(t * 2.6f) * 3.5f);
+                drone.LookAt = at;
+                yield return null;
+            }
+            drone.Release();
+        }
+
+        /// <summary>Spark flies at a point to draw machines off (fights listen for it).</summary>
+        public event Action<Vector3> Distracting;
 
         IEnumerator Look(Step step, Dictionary<string, Vector3> ids, string words)
         {
@@ -302,14 +571,22 @@ namespace Game
                 yield break;
             }
             string title = Title(step.target);
-            yield return drone.Fly(drone.Vantage(target, Size(step.target)), target, 0.6f, 12f);
+            // A machine looked at closely gives its weak point away.
+            var machine = Machine.All.FirstOrDefault(m => m && !m.Broken && m.Id == step.target) ?? (step.target == "AIM" ? traveller.AimedMachine : null);
+            if (machine) target = machine.transform.position;
+            yield return drone.Fly(drone.Vantage(target, machine ? 4f : Size(step.target)), target, 0.6f, machine ? 4f : 12f);
             yield return new WaitForSeconds(0.35f);
-            byte[] picture = drone.Picture(target);
+            byte[] picture = drone.Picture(machine && machine.WeakPoint ? machine.WeakPoint.position : target);
+            if (machine)
+            {
+                machine.Expose();
+                words = $"(You darted close to {machine.Title} and scanned it: the picture is what you see. Its weak point is its {(machine.WeakPoint ? machine.WeakPoint.name.ToLowerInvariant() : "core")}; now it glows for the survivor to see. Tell them where to hit it, in a few words.) " + words;
+            }
             hud.Photo(drone.Eye.Last, $"{droneName.ToUpperInvariant()}'S EYE   ·   {title.ToUpperInvariant()}");
             drone.Thinking = true;
             Turn seen = null;
             string question = $"(You flew to {title} ({step.target}) and looked closely: the picture is what you see now. Tell the survivor what you see that matters; if there is writing, read it out word for word.) The survivor had said: \"{words}\"";
-            yield return mind.Think(question, Moment(), ids.Keys.ToList(), picture, t => seen = t);
+            yield return mind.Think(question, Moment(words), ids.Keys.ToList(), picture, t => seen = t);
             drone.Thinking = false;
             Keep(seen);
             Remember("you", seen.Say);
@@ -320,6 +597,15 @@ namespace Game
         IEnumerator Make(Step step, Dictionary<string, Vector3> ids, string words)
         {
             var spec = step.thing;
+            // What it will make depends on how far it trusts the survivor. The model knows; the game makes sure.
+            var needs = Bond.Needs(spec);
+            if (needs > bond.Level)
+            {
+                drone.BackAway();
+                hud.Note($"Spark won't make that yet. It would have to trust you as {Bond.TierNames[(int)needs]}.", 5f);
+                bond.Event(spec.form == "WEAPON" ? "asked_weapon_early" : null, 0, $"You would not make them a {spec.name}: you don't trust them enough yet", 4, Time.time);
+                yield break;
+            }
             bool toHands = step.target == "ME";
             bool way = spec.form is "BRIDGE" or "STAIRS" or "RAMP" or "LIFT";
             Vector3 survivor = traveller.transform.position;
@@ -487,10 +773,16 @@ namespace Game
                 var top = landmarks.FirstOrDefault(l => l && l.Id == "MIRROR");
                 if (!told.Contains("mirror") && top && Vector3.Distance(p, top.Point) < 12f && Mathf.Abs(p.y - top.Point.y) < 5f)
                     Beat("mirror", Line(socket && socket.Full ? "Here it is. The joint's frozen." : "The socket's empty, and its joint is frozen solid.", "WORRIED"));
-                // Quiet and stuck: an idea of its own, from what it sees.
-                if (!handling && !Busy && !talk.Listening && !say.IsOpen && Time.time - quietSince > ideaAfter)
+                // Quiet and stuck: an idea of its own, from what it sees; each one waits twice as long as the last, until the step changes.
+                if (ideaStage != StageWords())
+                {
+                    ideaStage = StageWords();
+                    ideas = 0;
+                }
+                if (!handling && !Busy && !talk.Listening && !say.IsOpen && !(hologram && hologram.Showing) && Time.time - quietSince > ideaAfter * (1 << Mathf.Min(ideas, 4)))
                 {
                     quietSince = Time.time;
+                    ideas++;
                     beats.Enqueue(Idea);
                 }
             }
@@ -543,6 +835,12 @@ namespace Game
 
         Func<IEnumerator> Line(string words, string mood) => () => Speak(words, mood);
 
+        /// <summary>The mirror tries to turn on its frozen joint: a groan and a shudder.</summary>
+        IEnumerator Grind()
+        {
+            if (mirror) yield return mirror.Grind();
+        }
+
         IEnumerator Hint(string text, float seconds)
         {
             hud.ShowHint(text);
@@ -567,9 +865,11 @@ namespace Game
             drone.Thinking = true;
             byte[] picture = drone.Picture(traveller.AimPoint ?? follow.View.transform.position + follow.View.transform.forward * 20f);
             Turn idea = null;
-            yield return mind.Think("(The survivor has gone quiet for a while. Offer one idea, in one or two sentences, for what to do next, as a question they can say yes to. Do not act yet: no steps.)", Moment(), ids.Keys.ToList(), picture, t => idea = t);
+            string before = offered.Count == 0 ? "" : " You already offered these; offer something different, or simply say something about what you see or about yourself: " + string.Join(" / ", offered.Select(o => "\"" + o + "\"")) + ".";
+            yield return mind.Think("(The survivor has gone quiet for a while. Say one thing, one or two sentences: an idea for what to do next as a question they can say yes to, or a thought of your own about what you see." + before + " Do not act yet: no steps.)", Moment(""), ids.Keys.ToList(), picture, t => idea = t);
             drone.Thinking = false;
             idea.Steps.Clear();
+            offered.Add(idea.Say);
             Remember("you", idea.Say);
             Log("(quiet)", false, Mind.Describe(idea), idea.Seconds, idea.Source);
             yield return drone.Speak(idea.Say, idea.Mood, hud, droneName);
@@ -618,7 +918,7 @@ namespace Game
             var ids = Ids();
             drone.Thinking = true;
             yield return mind.Think("(The mirror is turning, but the sun is too dim to warm the vault. You have decided to give the mirror your own light, though it will leave you dark. Say goodbye to the survivor in one or two short sentences, warmly; use their name if you know it, and something they said to you if it fits. Do not explain the plan. No steps.)",
-                Moment(), ids.Keys.ToList(), null, t => goodbye = t);
+                Moment("goodbye"), ids.Keys.ToList(), null, t => goodbye = t);
             drone.Thinking = false;
             string farewell = goodbye != null && goodbye.Source != "offline" && goodbye.Say.Length > 0 ? goodbye.Say : "I have a little light left. It was always for this.";
             Log("(goodbye)", false, farewell, goodbye?.Seconds ?? 0f, goodbye?.Source ?? "rules");
@@ -704,6 +1004,8 @@ namespace Game
                 if (l && l.Known && !ids.ContainsKey(l.Id) && Vector3.Distance(l.Point, survivor) < 120f) ids[l.Id] = l.Point;
             foreach (var b in maker.Made)
                 if (b && !ids.ContainsKey(b.Id)) ids[b.Id] = b.Centre;
+            foreach (var m in Machine.All)
+                if (m && !m.Broken && !string.IsNullOrEmpty(m.Id) && Vector3.Distance(m.transform.position, survivor) < 80f) ids[m.Id] = m.transform.position;
             return ids;
         }
 
@@ -731,6 +1033,8 @@ namespace Game
 
         string Title(string id)
         {
+            var machine = Machine.All.FirstOrDefault(m => m && m.Id == id);
+            if (machine) return machine.Title;
             var landmark = landmarks.FirstOrDefault(l => l && l.Id == id);
             if (landmark) return landmark.Title;
             var built = maker.Find(id);
@@ -747,9 +1051,10 @@ namespace Game
         }
 
         /// <summary>What the drone is told is true now: names, the goal, what is held, the places near with what state they are in, what it made, what was said.</summary>
-        string Moment()
+        string Moment(string words)
         {
             var text = new StringBuilder("\n# The moment\n");
+            text.Append(bond.Describe(words, Time.time));
             text.Append("Your name: ").Append(droneName).Append(". The survivor's name: ").Append(survivorName.Length > 0 ? survivorName : "not told yet").Append(".\n");
             text.Append("Goal: bring the light back to the vault. Now: ").Append(StageWords()).Append(".\n");
             text.Append("The survivor holds: ").Append(traveller.Holding ? traveller.Holding.Title + (traveller.Holding.GetComponent<Tool>() ? " (a tool)" : "") + $" ({traveller.Holding.Mass:F0} kg)" : "nothing").Append(". ");
@@ -775,9 +1080,18 @@ namespace Game
                 if (traveller.Holding && traveller.Holding.transform == b.transform) text.Append(", in the survivor's hands");
                 text.Append(", ").Append(Where(b.Centre)).Append(".\n");
             }
-            if (remembered.Count > 0) text.Append("Remembered: ").Append(string.Join("; ", remembered)).Append(".\n");
+            var near = Machine.All.Where(m => m && !m.Broken && !string.IsNullOrEmpty(m.Id) && Vector3.Distance(m.transform.position, traveller.transform.position) < 80f).ToList();
+            if (near.Count > 0)
+            {
+                text.Append("Machines near (id: what, what it is doing, where):\n");
+                foreach (var m in near)
+                    text.Append("- ").Append(m.Id).Append(": ").Append(m.Title).Append(", ").Append(m.Doing).Append(m.Exposed ? ", its weak point found (" + (m.WeakPoint ? m.WeakPoint.name.ToLowerInvariant() : "") + ")" : "")
+                        .Append($", {m.Fraction * 100f:F0}% whole, ").Append(Where(m.transform.position)).Append(".\n");
+            }
+            if (warmth && warmth.Value < 0.99f) text.Append($"The survivor's warmth: {warmth.Value * 100f:F0}% (the machines' fire takes it; fires give it back).\n");
+            if (remembered.Count > 0) text.Append("What you know about them and keep in mind: ").Append(string.Join("; ", remembered)).Append(".\n");
             text.Append("Recent words:").Append(recent.Count == 0 ? " none yet.\n" : "\n");
-            foreach (var (who, words) in recent) text.Append("- ").Append(who).Append(": \"").Append(words).Append("\"\n");
+            foreach (var (who, said) in recent) text.Append("- ").Append(who).Append(": \"").Append(said).Append("\"\n");
             return text.ToString();
         }
 

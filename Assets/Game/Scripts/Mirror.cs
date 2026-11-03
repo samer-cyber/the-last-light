@@ -52,6 +52,30 @@ namespace Game
             dish.rotation = to;
         }
 
+        /// <summary>Its heart is in but its joint is frozen: it wakes, strains to turn, and can't.</summary>
+        public IEnumerator Grind()
+        {
+            if (sound && wakeClip) sound.PlayOneShot(wakeClip, 0.7f);
+            yield return new WaitForSeconds(0.6f);
+            if (sound && turnClip)
+            {
+                sound.pitch = 0.6f;
+                sound.PlayOneShot(turnClip, 0.9f);
+            }
+            var rest = dish.localRotation;
+            for (float t = 0f; t < 2.4f; t += Time.deltaTime)
+            {
+                // A few degrees one way, caught, a shudder.
+                float strain = Mathf.Sin(Mathf.Clamp01(t / 2.4f) * Mathf.PI);
+                dish.localRotation = rest * Quaternion.Euler(Mathf.Sin(t * 47f) * 0.6f * strain, 2.5f * strain + Mathf.Sin(t * 31f) * 0.8f * strain, 0f);
+                Shine(0.04f * strain);
+                yield return null;
+            }
+            dish.localRotation = rest;
+            Shine(0f);
+            if (sound) sound.pitch = 1f;
+        }
+
         /// <summary>How brightly it throws light now, 0 to 1; above 0 the beam shows.</summary>
         public void Shine(float k)
         {

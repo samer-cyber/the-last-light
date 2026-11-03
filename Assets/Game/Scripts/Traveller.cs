@@ -64,6 +64,8 @@ namespace Game
         public Vector3? AimPoint { get; private set; }
         /// <summary>The ice the centre of the view rests on, if it is close.</summary>
         public Frozen AimedIce { get; private set; }
+        /// <summary>The machine the centre of the view rests on.</summary>
+        public Machine AimedMachine { get; private set; }
         /// <summary>When set, the head turns to this (the drone, while they talk).</summary>
         public Vector3? Attending { get; set; }
         /// <summary>The last time the survivor reached for something (the body animates it).</summary>
@@ -72,6 +74,8 @@ namespace Game
         public Transform Body => body;
         /// <summary>Rising on a balloon.</summary>
         public bool Floating => Holding && Holding.GetComponent<Floater>();
+        /// <summary>Falling slowly on wings.</summary>
+        public bool Gliding { get; private set; }
 
         CharacterController controller;
         Vector3 velocity, safe;
@@ -151,6 +155,15 @@ namespace Game
                 }
             }
             else velocity.y -= gravity * dt;
+            var glider = Holding ? Holding.GetComponent<Glider>() : null;
+            Gliding = glider && !Grounded && velocity.y < 0f;
+            if (Gliding)
+            {
+                velocity.y = Mathf.Max(velocity.y, -glider.FallSpeed);
+                Vector3 ahead = Facing * glider.Forward;
+                velocity.x = Mathf.Lerp(velocity.x, ahead.x + wish.x * 3f, 1f - Mathf.Exp(-1.5f * dt));
+                velocity.z = Mathf.Lerp(velocity.z, ahead.z + wish.z * 3f, 1f - Mathf.Exp(-1.5f * dt));
+            }
 
             var flags = controller.Move(velocity * dt);
             bool wasGrounded = Grounded;
@@ -162,7 +175,11 @@ namespace Game
             if (riding) riding.Ridden = true;
 
             Pace = Mathf.MoveTowards(Pace, horizontal.magnitude < 0.2f ? 0f : horizontal.magnitude <= walkSpeed + 0.1f ? horizontal.magnitude / walkSpeed : 1f + (horizontal.magnitude - walkSpeed) / (runSpeed - walkSpeed), dt * 6f);
-            if (horizontal.sqrMagnitude > 0.05f && body)
+            // With something to aim or a shield up, they face where the view looks; else where they walk.
+            bool aiming = Holding && (Holding.GetComponent<Weapon>() || Holding.GetComponent<Shield>() || Holding.GetComponent<Throwable>());
+            if (aiming && body)
+                body.rotation = Quaternion.Slerp(body.rotation, Quaternion.Euler(0f, follow.Yaw, 0f), 1f - Mathf.Exp(-turnSpeed * 1.5f * dt));
+            else if (horizontal.sqrMagnitude > 0.05f && body)
             {
                 var facing = Quaternion.LookRotation(horizontal.normalized, Vector3.up);
                 body.rotation = Quaternion.Slerp(body.rotation, facing, 1f - Mathf.Exp(-turnSpeed * dt));
@@ -175,6 +192,11 @@ namespace Game
             if (free && keys.eKey.wasPressedThisFrame) Use();
             UseTool(free);
         }
+
+        public FollowCamera Follow => follow;
+
+        /// <summary>The way the survivor's body faces.</summary>
+        public Vector3 Facing => body ? body.forward : transform.forward;
 
         /// <summary>Puts the survivor somewhere, facing a way (tests and scripted moments).</summary>
         public void Place(Vector3 position, float yaw)
@@ -239,12 +261,35 @@ namespace Game
 
         void UseTool(bool free)
         {
-            var tool = Holding ? Holding.GetComponent<Tool>() : null;
-            if (!tool) return;
             var mouse = Mouse.current;
             var keys = Keyboard.current;
             bool pressed = free && (mouse != null && mouse.leftButton.wasPressedThisFrame || keys != null && keys.fKey.wasPressedThisFrame);
             bool held = free && (mouse != null && mouse.leftButton.isPressed || keys != null && keys.fKey.isPressed);
+            var aim = follow.View.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0f));
+            var weapon = Holding ? Holding.GetComponent<Weapon>() : null;
+            if (weapon)
+            {
+                weapon.Use(pressed, held, aim, transform);
+                if (pressed || held && weapon.Type == Weapon.Kind.Beam)
+                {
+                    ReachedAt = Time.time;
+                    ReachedFor = AimPoint ?? aim.origin + aim.direction * 20f;
+                }
+                return;
+            }
+            var charges = Holding ? Holding.GetComponent<Throwable>() : null;
+            if (charges)
+            {
+                if (pressed && charges.Charges > 0)
+                {
+                    ReachedAt = Time.time;
+                    ReachedFor = AimPoint ?? aim.origin + aim.direction * 20f;
+                }
+                charges.Use(pressed, aim, transform);
+                return;
+            }
+            var tool = Holding ? Holding.GetComponent<Tool>() : null;
+            if (!tool) return;
             switch (tool.Kind)
             {
                 case Tool.Use.Break:
@@ -271,6 +316,7 @@ namespace Game
             AimPoint = null;
             AimedBuilt = null;
             AimedIce = null;
+            AimedMachine = null;
             aimedSocket = null;
             Holdable looked = null;
             // Small named things are seen by their own trigger; places are named by the region that
@@ -292,6 +338,8 @@ namespace Game
                     break;
                 }
                 AimPoint = hit.point;
+                AimedMachine = hit.collider.GetComponentInParent<Machine>();
+                if (AimedMachine && AimedMachine.Broken) AimedMachine = null;
                 looked = hit.collider.GetComponentInParent<Holdable>();
                 AimedBuilt = hit.collider.GetComponentInParent<Built>();
                 AimedIce = hit.collider.GetComponentInParent<Frozen>();
@@ -323,12 +371,18 @@ namespace Game
                 hud.HideAim();
                 return;
             }
-            string name = AimedBuilt ? AimedBuilt.Name : Aimed ? Aimed.Title : null;
+            string name = AimedMachine ? AimedMachine.Title.Replace("a ", "") : AimedBuilt ? AimedBuilt.Name : Aimed ? Aimed.Title : null;
             if (Holding)
             {
                 bool socket = aimedSocket && !aimedSocket.Full && Holding.GetComponent<Heart>() && Vector3.Distance(aimedSocket.Seat, transform.position) < reach + 1.2f;
                 var tool = Holding.GetComponent<Tool>();
-                string use = tool ? tool.Kind == Tool.Use.Heat ? "   [Mouse] hold the flame to it" : tool.Kind == Tool.Use.Break ? "   [Mouse] strike" : "" : "";
+                var weapon = Holding.GetComponent<Weapon>();
+                var charges = Holding.GetComponent<Throwable>();
+                string use = weapon ? weapon.Type == Weapon.Kind.Beam ? "   [Mouse] hold to fire" : weapon.Type == Weapon.Kind.Blade ? "   [Mouse] swing" : "   [Mouse] fire"
+                    : charges ? $"   [Mouse] throw ({charges.Charges} left)"
+                    : Holding.GetComponent<Glider>() ? "   jump from a height to glide"
+                    : Holding.GetComponent<Shield>() ? "   hold it toward their fire"
+                    : tool ? tool.Kind == Tool.Use.Heat ? "   [Mouse] hold the flame to it" : tool.Kind == Tool.Use.Break ? "   [Mouse] strike" : "" : "";
                 hud.Aim(socket ? "the socket" : name, socket ? "[E] set the heart in it" : "[E] put down" + use);
             }
             else if (InReach) hud.Aim(InReach.Title, "[E] pick up");

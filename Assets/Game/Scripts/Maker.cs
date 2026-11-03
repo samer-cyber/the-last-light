@@ -79,6 +79,7 @@ namespace Game
         [SerializeField] PhysicsMaterial bouncy;
         [SerializeField] AudioSource sound;
         [SerializeField, Tooltip("A piece locking into place: stone, metal, ice, glass, wood, light.")] AudioClip[] lockClips;
+        [SerializeField] AudioClip swingClip, boltClip;
         [SerializeField] AudioClip doneClip, apartClip, planClip, boingClip, liftClip, fireClip;
         [SerializeField, Tooltip("What the ground is, for finding gaps and slopes.")] LayerMask ground = ~0;
         [SerializeField] float longest = 34f;
@@ -158,6 +159,12 @@ namespace Game
                 case "BALLOON": problem = Balloon(plan, r, size); break;
                 case "SPRING": problem = SpringPad(plan, r, size); break;
                 case "TOOL": problem = ToolShape(plan, r, size); break;
+                case "WEAPON":
+                case "SHIELD":
+                case "THROWN":
+                case "GLIDER": problem = HeldShape(plan, r, size); break;
+                case "MIRROR": problem = Wall(plan, r, size); break;
+                case "DECOY": problem = Lamp(plan, r, Mathf.Min(size, 0.8f)); break;
                 default: problem = Custom(plan, r, size); break;
             }
             if (problem != null || plan.Parts.Count == 0) return null;
@@ -585,6 +592,78 @@ namespace Game
             return null;
         }
 
+        /// <summary>
+        /// Something to fight or fly with, in the hand: the model's own design brought to the size of the
+        /// thing (a blade about a metre, a shield 0.85 m, wings 1.9 m across), or a design of its kind.
+        /// Held things point along their length (y), out from the hand.
+        /// </summary>
+        string HeldShape(Plan plan, Request r, float size)
+        {
+            Vector3 at = Stand(r, out float baseY);
+            plan.Base = at;
+            var spec = r.Spec;
+            float length = spec.form switch { "GLIDER" => 1.9f, "SHIELD" => 0.85f, "THROWN" => 0.3f, _ => spec.use == "BLADE" ? 1.05f : 0.95f };
+            if (spec.parts != null && spec.parts.Length > 0)
+            {
+                string problem = Custom(plan, r, 1f);
+                if (problem != null) return problem;
+                var bounds = new Bounds(plan.Parts[0].Position, plan.Parts[0].Size);
+                foreach (var part in plan.Parts) bounds.Encapsulate(new Bounds(part.Position, part.Size));
+                float scale = length / Mathf.Max(0.05f, Mathf.Max(bounds.size.x, Mathf.Max(bounds.size.y, bounds.size.z)));
+                Vector3 foot = new Vector3(bounds.center.x, bounds.min.y, bounds.center.z);
+                for (int i = 0; i < plan.Parts.Count; i++)
+                {
+                    var part = plan.Parts[i];
+                    part.Position = at + (part.Position - foot) * scale;
+                    part.Size *= scale;
+                    plan.Parts[i] = part;
+                }
+                return null;
+            }
+            void Add(Shape shape, float y, Vector3 s, string look, float x = 0f, float z = 0f) =>
+                plan.Parts.Add(new Part { Shape = shape, Position = at + new Vector3(x, y, z), Rotation = Quaternion.identity, Size = s, Look = look });
+            switch (spec.form == "WEAPON" ? spec.use : spec.form)
+            {
+                case "BLADE":
+                    Add(Shape.Cylinder, 0.1f, new Vector3(0.045f, 0.2f, 0.045f), "METAL");
+                    Add(Shape.Box, 0.22f, new Vector3(0.2f, 0.035f, 0.06f), "METAL");
+                    Add(Shape.Box, 0.64f, new Vector3(0.055f, 0.82f, 0.014f), "LIGHT");
+                    break;
+                case "BEAM":
+                    Add(Shape.Cylinder, 0.26f, new Vector3(0.08f, 0.52f, 0.08f), "METAL");
+                    Add(Shape.Cylinder, 0.42f, new Vector3(0.13f, 0.035f, 0.13f), "LIGHT");
+                    Add(Shape.Cylinder, 0.55f, new Vector3(0.13f, 0.035f, 0.13f), "LIGHT");
+                    Add(Shape.Cone, 0.68f, new Vector3(0.1f, 0.12f, 0.1f), "METAL");
+                    break;
+                case "SPREAD":
+                    Add(Shape.Box, 0.24f, new Vector3(0.14f, 0.48f, 0.1f), "METAL");
+                    for (int i = -1; i <= 1; i++) Add(Shape.Cylinder, 0.6f, new Vector3(0.035f, 0.26f, 0.035f), "METAL", i * 0.045f);
+                    Add(Shape.Box, 0.74f, new Vector3(0.16f, 0.025f, 0.05f), "LIGHT");
+                    break;
+                case "SHIELD":
+                    Add(Shape.Cylinder, 0.06f, new Vector3(0.04f, 0.12f, 0.04f), "METAL");
+                    Add(Shape.Box, 0.16f, new Vector3(0.62f, 0.035f, 0.78f), "LIGHT");
+                    Add(Shape.Box, 0.14f, new Vector3(0.66f, 0.02f, 0.82f), "METAL");
+                    break;
+                case "GLIDER":
+                    Add(Shape.Cylinder, 0.45f, new Vector3(0.04f, 0.9f, 0.04f), "METAL");
+                    Add(Shape.Box, 0.5f, new Vector3(1.9f, 0.5f, 0.02f), "LIGHT");
+                    break;
+                case "THROWN":
+                    for (int i = 0; i < 3; i++) Add(Shape.Sphere, 0.08f + 0.1f * i, Vector3.one * 0.09f, "LIGHT");
+                    break;
+                default:
+                    // A bolt caster: a body, a barrel, an emitter at the end.
+                    Add(Shape.Box, 0.3f, new Vector3(0.07f, 0.6f, 0.1f), "METAL");
+                    Add(Shape.Box, 0.1f, new Vector3(0.06f, 0.16f, 0.05f), "METAL", 0f, 0.07f);
+                    Add(Shape.Cylinder, 0.75f, new Vector3(0.035f, 0.32f, 0.035f), "METAL");
+                    Add(Shape.Sphere, 0.93f, Vector3.one * 0.06f, "LIGHT");
+                    if (spec.reach >= 4) Add(Shape.Cylinder, 0.52f, new Vector3(0.05f, 0.14f, 0.05f), "GLASS", 0f, -0.07f);
+                    break;
+            }
+            return null;
+        }
+
         string ToolShape(Plan plan, Request r, float size)
         {
             Vector3 at = Stand(r, out float baseY);
@@ -883,11 +962,11 @@ namespace Game
                 var holdable = holder.gameObject.AddComponent<Holdable>();
                 holdable.Title = spec.name;
                 holdable.Mass = spec.floats ? 1f : holder.Mass;
-                holdable.OneHand = spec.form == "TOOL" || spec.floats || spec.form == "LAMP";
+                holdable.OneHand = spec.form is "TOOL" or "WEAPON" or "SHIELD" or "THROWN" or "GLIDER" || spec.floats || spec.form == "LAMP";
                 // Held by its lowest point: a handle, a balloon's cord, a lantern's base.
                 float lowest = plan.Parts.Min(p => p.Position.y - p.Size.y * 0.5f);
                 Vector3 grip = plan.Parts.OrderBy(p => p.Position.y - p.Size.y * 0.5f).First().Position;
-                grip.y = spec.form == "TOOL" ? lowest + 0.12f : spec.floats ? plan.Parts[0].Position.y : lowest + 0.02f;
+                grip.y = spec.form is "TOOL" or "WEAPON" ? lowest + 0.12f : spec.floats ? plan.Parts[0].Position.y : lowest + 0.02f;
                 holdable.Grip = holder.transform.InverseTransformPoint(grip);
             }
             if (spec.floats)
@@ -895,7 +974,55 @@ namespace Game
                 var floater = holder.gameObject.AddComponent<Floater>();
                 floater.Lift = Mathf.Lerp(1.1f, 2.6f, Mathf.InverseLerp(0.5f, 2.2f, size));
             }
-            if (spec.form == "TOOL" || spec.use != "NONE" && loose && reach < 1.5f)
+            // Things to fight and fly with.
+            var tip = holder.Pieces.OrderByDescending(p => p.transform.position.y).First().transform;
+            switch (spec.form)
+            {
+                case "WEAPON":
+                    var weapon = holder.gameObject.AddComponent<Weapon>();
+                    weapon.Type = spec.use switch { "BLADE" => Weapon.Kind.Blade, "BEAM" => Weapon.Kind.Beam, "SPREAD" => Weapon.Kind.Spread, _ => Weapon.Kind.Bolt };
+                    weapon.Power = spec.power;
+                    weapon.Reach = spec.reach;
+                    weapon.Rate = spec.rate;
+                    weapon.Tip = tip;
+                    weapon.FireClip = weapon.Type == Weapon.Kind.Blade ? swingClip : boltClip;
+                    if (weapon.Type == Weapon.Kind.Beam)
+                    {
+                        var ray = new GameObject("Beam").AddComponent<LineRenderer>();
+                        ray.transform.SetParent(holder.transform, false);
+                        ray.useWorldSpace = true;
+                        ray.positionCount = 2;
+                        ray.sharedMaterial = flame;
+                        ray.startColor = new Color(0.5f, 0.95f, 1f, 1f);
+                        ray.endColor = new Color(0.4f, 0.85f, 1f, 0.6f);
+                        ray.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                        ray.enabled = false;
+                        weapon.SetBeam(ray);
+                    }
+                    break;
+                case "THROWN":
+                    var charges = holder.gameObject.AddComponent<Throwable>();
+                    charges.Flare = spec.use == "FLARE";
+                    charges.Charges = 2 + spec.rate;
+                    charges.Power = spec.power;
+                    charges.Glow = looks[LookIndex("LIGHT")];
+                    break;
+                case "SHIELD":
+                    holder.gameObject.AddComponent<Shield>();
+                    break;
+                case "GLIDER":
+                    holder.gameObject.AddComponent<Glider>();
+                    break;
+                case "MIRROR":
+                    holder.gameObject.AddComponent<MirrorWall>();
+                    break;
+                case "DECOY":
+                    holder.gameObject.AddComponent<Decoy>();
+                    if (spec.heat == "NONE" || spec.heat == "COLD") Heat.Add(holder.gameObject, false, 0.8f);
+                    break;
+            }
+
+            if (spec.form == "TOOL" || spec.use is "BREAK" or "HEAT" or "LIGHT" && loose && reach < 1.5f)
             {
                 var tool = holder.gameObject.AddComponent<Tool>();
                 tool.Kind = spec.use switch { "HEAT" => Tool.Use.Heat, "LIGHT" => Tool.Use.Light, "BREAK" => Tool.Use.Break, _ => Tool.Use.Break };

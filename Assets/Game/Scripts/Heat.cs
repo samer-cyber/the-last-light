@@ -41,6 +41,14 @@ namespace Game
             return Power * k * k;
         }
 
+        /// <summary>Whether something hot warms this point.</summary>
+        public static bool Near(Vector3 point, float within)
+        {
+            foreach (var h in All)
+                if (h && h.isActiveAndEnabled && h.Power >= 1f && Vector3.Distance(h.transform.position, point) < Mathf.Max(within, h.Radius)) return true;
+            return false;
+        }
+
         public static float Total(Vector3 point)
         {
             float sum = 0f;
@@ -52,6 +60,8 @@ namespace Game
         public static Heat Add(GameObject thing, bool hot, float size)
         {
             var heat = thing.AddComponent<Heat>();
+            // Machines can smell anything hot: a fire draws Seekers.
+            if (hot) thing.AddComponent<HeatSource>().Pull = 1.5f;
             heat.Radius = (hot ? 5f : 3f) * Mathf.Clamp(size, 0.6f, 2f);
             heat.Power = hot ? 3f : 1f;
             var light = new GameObject("Heat").AddComponent<Light>();

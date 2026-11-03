@@ -14,8 +14,13 @@ namespace Game
         [SerializeField] StyleSheet style;
 
         VisualElement layer, hint, white, subtitle, black, listen, listenLevel, aim, aimDot, voice, photo, photoImage, goal;
+        VisualElement hologram, scanLines, honour, trust, logPanel, logEntries;
+        VisualElement[] trustPips;
         Label title, card, listenWords, said, note, aimWords, aimAction, carry, voiceName, voiceWords, photoCaption, goalTitle, goalStep;
-        IVisualElementScheduledItem saidFade, noteFade, voiceFade, photoFade;
+        Label honourTitle, honourLine, trustWords, health;
+        IVisualElementScheduledItem saidFade, noteFade, voiceFade, photoFade, honourFade, hurtFade;
+        VisualElement hurt;
+        Texture2D lines;
 
         public float Black
         {
@@ -183,6 +188,83 @@ namespace Game
             goal.EnableInClassList("hud__goal--shown", !string.IsNullOrEmpty(title));
         }
 
+        /// <summary>A picture laid over the whole view (a hologram of the past), at an opacity; null takes it away.</summary>
+        public void Hologram(Texture2D picture, float opacity)
+        {
+            Build();
+            if (picture) hologram.style.backgroundImage = new StyleBackground(picture);
+            hologram.style.opacity = picture ? opacity : 0f;
+            scanLines.style.opacity = picture ? opacity * 0.5f : 0f;
+            hologram.style.display = picture && opacity > 0.001f ? DisplayStyle.Flex : DisplayStyle.None;
+            scanLines.style.display = hologram.style.display;
+        }
+
+        /// <summary>Something earned, high in the middle for a few seconds: "SPARK TRUSTS YOU" and what it means.</summary>
+        public void Honour(string heading, string line, float seconds = 6f)
+        {
+            Build();
+            honourTitle.text = heading;
+            honourLine.text = line;
+            honour.AddToClassList("hud__honour--shown");
+            honourFade?.Pause();
+            honourFade = honour.schedule.Execute(() => honour.RemoveFromClassList("hud__honour--shown")).StartingIn((long)(seconds * 1000f));
+        }
+
+        /// <summary>A red flash at the edges: the survivor was hit.</summary>
+        public void Flash(float strength)
+        {
+            Build();
+            hurt.style.opacity = strength;
+            hurtFade?.Pause();
+            hurtFade = hurt.schedule.Execute(() => hurt.style.opacity = 0f).StartingIn(120);
+        }
+
+        /// <summary>Spark's trust, small under the goal: four marks, as many lit as the tier, and its name.</summary>
+        public void Trust(int tier, string words)
+        {
+            Build();
+            trust.AddToClassList("hud__trust--shown");
+            for (int i = 0; i < trustPips.Length; i++) trustPips[i].EnableInClassList("hud__trust-pip--on", i <= tier);
+            trustWords.text = words;
+        }
+
+        /// <summary>How warm the survivor still is (1 full); hidden when full.</summary>
+        public void Warmth(float value)
+        {
+            Build();
+            health.style.opacity = value > 0.995f ? 0f : 1f;
+            health.style.width = Length.Percent(24f * Mathf.Clamp01(value));
+            health.EnableInClassList("hud__warmth--low", value < 0.35f);
+        }
+
+        /// <summary>Spark's log, open on the right, or closed.</summary>
+        public void Log(System.Collections.Generic.IEnumerable<(string when, string entry)> entries, bool open)
+        {
+            Build();
+            logPanel.EnableInClassList("hud__log--shown", open);
+            if (!open) return;
+            logEntries.Clear();
+            int count = 0;
+            foreach (var (when, entry) in entries)
+            {
+                var row = Part("hud__log-row");
+                var at = new Label(when) { pickingMode = PickingMode.Ignore };
+                at.AddToClassList("hud__log-when");
+                var words = new Label(entry) { pickingMode = PickingMode.Ignore };
+                words.AddToClassList("hud__log-entry");
+                row.Add(at);
+                row.Add(words);
+                logEntries.Add(row);
+                count++;
+            }
+            if (count == 0)
+            {
+                var empty = new Label("Nothing yet.") { pickingMode = PickingMode.Ignore };
+                empty.AddToClassList("hud__log-entry");
+                logEntries.Add(empty);
+            }
+        }
+
         /// <summary>The player's own words, as they were heard, for a few seconds.</summary>
         public void Said(string text, float seconds = 5f) => Flash(said, "hud__said--shown", "“" + text + "”", seconds, ref saidFade);
 
@@ -205,6 +287,16 @@ namespace Game
             if (style) root.styleSheets.Add(style);
             layer = Element("hud");
             OsFonts.Apply(layer, OsFonts.Interface());
+            // The hologram of the past lies under everything else.
+            hologram = Element("hud__hologram");
+            hologram.style.display = DisplayStyle.None;
+            lines = new Texture2D(1, 4, TextureFormat.RGBA32, false) { filterMode = FilterMode.Point, wrapMode = TextureWrapMode.Repeat, name = "Scan Lines" };
+            lines.SetPixels(new[] { new Color(0f, 0f, 0f, 0.55f), new Color(0f, 0f, 0f, 0f), new Color(0.6f, 0.95f, 1f, 0.08f), new Color(0f, 0f, 0f, 0f) });
+            lines.Apply();
+            hurt = Element("hud__hurt");
+            scanLines = Element("hud__scanlines");
+            scanLines.style.backgroundImage = new StyleBackground(lines);
+            scanLines.style.display = DisplayStyle.None;
             hint = Element("hud__hint");
             listen = Element("hud__listen");
             listen.Add(Part("hud__listen-dot"));
@@ -241,9 +333,41 @@ namespace Game
             goalStep = new Label { pickingMode = PickingMode.Ignore };
             goalStep.AddToClassList("hud__goal-step");
             goal.Add(goalStep);
+            trust = Element("hud__trust");
+            var pips = Part("hud__trust-pips");
+            trustPips = new VisualElement[4];
+            for (int i = 0; i < 4; i++)
+            {
+                trustPips[i] = Part("hud__trust-pip");
+                pips.Add(trustPips[i]);
+            }
+            trust.Add(pips);
+            trustWords = new Label { pickingMode = PickingMode.Ignore };
+            trustWords.AddToClassList("hud__trust-words");
+            trust.Add(trustWords);
+            health = new Label { pickingMode = PickingMode.Ignore };
+            health.AddToClassList("hud__warmth");
+            health.style.opacity = 0f;
+            layer.Add(health);
+            honour = Element("hud__honour");
+            honourTitle = new Label { pickingMode = PickingMode.Ignore };
+            honourTitle.AddToClassList("hud__honour-title");
+            honour.Add(honourTitle);
+            honourLine = new Label { pickingMode = PickingMode.Ignore };
+            honourLine.AddToClassList("hud__honour-line");
+            honour.Add(honourLine);
+            logPanel = Element("hud__log");
+            var logHead = new Label("SPARK'S LOG") { pickingMode = PickingMode.Ignore };
+            logHead.AddToClassList("hud__log-head");
+            logPanel.Add(logHead);
+            logEntries = Part("hud__log-entries");
+            logPanel.Add(logEntries);
             photo = Element("hud__photo");
             photoImage = Part("hud__photo-image");
             photo.Add(photoImage);
+            // A viewfinder over the picture: corner marks and a red dot.
+            foreach (string corner in new[] { "tl", "tr", "bl", "br" }) photoImage.Add(Part("hud__photo-corner hud__photo-corner--" + corner));
+            photoImage.Add(Part("hud__photo-rec"));
             photoCaption = new Label { pickingMode = PickingMode.Ignore };
             photoCaption.AddToClassList("hud__photo-caption");
             photo.Add(photoCaption);

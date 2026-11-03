@@ -78,6 +78,10 @@ namespace Game
             var held = traveller.Holding;
             int both = held && !held.OneHand ? 1 : 0;
             int pose = held && held.OneHand ? traveller.Floating ? 3 : 2 : both;
+            var weapon = held ? held.GetComponent<Weapon>() : null;
+            if (weapon && weapon.Type != Weapon.Kind.Blade) pose = 4;
+            else if (held && held.GetComponent<Shield>()) pose = 5;
+            else if (held && held.GetComponent<Glider>()) pose = 3;
             Arm(left, both == 1 ? 0f : -s * armSwing, run, air, 0f, both);
             Arm(right, pose != 0 ? 0f : s * armSwing, run, air, reach, pose);
 
@@ -122,6 +126,9 @@ namespace Game
             side.foot.localRotation = Quaternion.Euler(thigh * 0.6f - knee * 0.55f - dip * 0.5f, 0f, 0f);
         }
 
+        /// <summary>How far the view looks down (degrees; up is negative), for aiming.</summary>
+        float Aim => traveller && traveller.Follow ? Mathf.Clamp(traveller.Follow.Pitch, -40f, 50f) : 0f;
+
         void Arm(Side side, float swing, float run, bool air, float reach, int pose)
         {
             bool isLeft = side.upperArm == left.upperArm;
@@ -146,6 +153,17 @@ namespace Game
                     // Hanging from a balloon's cord.
                     arm = Quaternion.Euler(-172f, 0f, outward * 8f);
                     elbow = 4f;
+                    break;
+                case 4:
+                    // Held out and aimed where the view looks, a kick back when it fires.
+                    arm = Quaternion.Euler(-86f + Aim * 0.85f + reach * 14f, outward * -4f, outward * 3f);
+                    elbow = 6f + reach * 18f;
+                    reach = 0f;
+                    break;
+                case 5:
+                    // A shield before the chest.
+                    arm = Quaternion.Euler(-62f, outward * -28f, outward * 4f);
+                    elbow = 74f;
                     break;
             }
             if (reach > 0f) arm = Quaternion.Slerp(arm, Quaternion.Euler(-70f, outward * -15f, outward * 10f), reach);
