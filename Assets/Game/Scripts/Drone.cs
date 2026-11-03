@@ -29,6 +29,8 @@ namespace Game
         [SerializeField] AudioClip moveClip;
         [SerializeField, Tooltip("Speaks in words (ElevenLabs) rather than chirps, when it can.")] bool spoken = true;
         [SerializeField, Range(0f, 1f), Tooltip("Its lines peak at full scale: this keeps them clear of clipping, and above the footsteps.")] float voiceVolume = 0.65f;
+        [SerializeField, Tooltip("Its own small sounds before a line now and then, by mood, and a hum while it thinks.")] AudioClip curiousChirp, nervousChirp, happyChirp, sadChirp, thinkingHum;
+        [SerializeField, Tooltip("Letters a second the subtitles leave time for: the next line waits until this one could be read.")] float readingSpeed = 15f;
         [SerializeField, Tooltip("Snow flung off the shell when it shakes.")] ParticleSystem snowOff;
         [SerializeField] Vector3 offset = new Vector3(0.8f, 1.95f, -0.2f);
         [SerializeField] Color warm = new Color(1f, 0.62f, 0.25f);
@@ -152,6 +154,7 @@ namespace Game
 
             // The iris: wide to listen, narrow and turning to think, pulsing with its chirps.
             think = Mathf.MoveTowards(think, Thinking ? 1f : 0f, dt * 3f);
+            HumWhileThinking();
             if (Speaking && envelope != null && envelope.Length > 0)
             {
                 int at = Mathf.Clamp((int)((Time.time - speakStart) * 60f), 0, envelope.Length - 1);
@@ -279,7 +282,7 @@ namespace Game
         /// time, so it never talks over itself: a line waits while another is fetched or said, and a quick one
         /// (said in the moment, like a warning) is dropped instead of waiting.
         /// </summary>
-        public IEnumerator Speak(string line, string mood, Hud hud, string name, bool quick = false)
+        public IEnumerator Speak(string line, string mood, Hud hud, string name, bool quick = false, AudioClip given = null)
         {
             if (string.IsNullOrWhiteSpace(line) || quick && Busy) yield break;
             // In turn: the earliest line still waiting goes next (one whose coroutine was stopped is passed over).
@@ -293,13 +296,20 @@ namespace Game
             waiting.Remove(ticket);
             // Held while the voice is fetched (that gives up after 8 s), then until the line has been said.
             heldUntil = Time.time + 12f;
-            AudioClip clip = null;
-            if (spoken) yield return SparkVoice.Clip(line, mood, 8f, c => clip = c);
+            AudioClip clip = given;
+            if (!clip && spoken) yield return SparkVoice.Clip(line, mood, 8f, c => clip = c);
             bool chirps = !clip;
             if (chirps) clip = DroneVoice.Chirps(line, mood);
             envelope = chirps ? null : SparkVoice.Envelope(clip);
             float seconds = clip.length;
             Feel(mood);
+            // Now and then, a sound of its own first: a curious warble, a nervous double beep, a happy trill.
+            var chirp = given || quick ? null : Chirp(mood);
+            if (chirp && voice)
+            {
+                voice.PlayOneShot(chirp, 0.5f);
+                yield return new WaitForSeconds(Mathf.Min(chirp.length, 0.9f));
+            }
             if (voice)
             {
                 voice.pitch = 1f;
@@ -308,8 +318,8 @@ namespace Game
             Saying = line;
             speakStart = Time.time;
             speakingUntil = Time.time + seconds;
-            // A breath before the next line.
-            heldUntil = speakingUntil + 0.4f;
+            // A breath before the next line, and time to have read this one.
+            heldUntil = Mathf.Max(speakingUntil + 0.7f, speakStart + line.Length / readingSpeed);
             for (float t = 0f; t < seconds; t += Time.deltaTime)
             {
                 hud.Voice(name, line, Mathf.Clamp01(t / (seconds * 0.9f)));
@@ -318,6 +328,37 @@ namespace Game
             Saying = null;
             hud.Voice(name, line, 1f);
             hud.VoiceFade(2.2f + line.Length * 0.03f);
+        }
+
+        float chirpedAt = -100f;
+
+        /// <summary>One of its own sounds for a mood, about one line in three and never two lines running.</summary>
+        AudioClip Chirp(string mood)
+        {
+            if (Time.time - chirpedAt < 12f || UnityEngine.Random.value > 0.4f) return null;
+            var clip = mood switch
+            {
+                "CURIOUS" => curiousChirp,
+                "SCARED" or "WORRIED" => nervousChirp,
+                "HAPPY" or "PLAYFUL" or "SURE" => happyChirp,
+                "SAD" or "HURT" or "SORRY" => sadChirp,
+                _ => null,
+            };
+            if (clip) chirpedAt = Time.time;
+            return clip;
+        }
+
+        bool hummed;
+
+        /// <summary>While it thinks: a low hum with small clicks, once for each time it starts thinking.</summary>
+        void HumWhileThinking()
+        {
+            if (Thinking && !hummed && thinkingHum && voice && Time.time - chirpedAt > 6f)
+            {
+                voice.PlayOneShot(thinkingHum, 0.35f);
+                chirpedAt = Time.time;
+            }
+            hummed = Thinking;
         }
 
         /// <summary>The earliest line still waiting for the voice, or int.MaxValue if none.</summary>

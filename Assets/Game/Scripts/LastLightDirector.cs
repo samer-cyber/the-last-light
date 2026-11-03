@@ -63,6 +63,12 @@ namespace Game
         [SerializeField, Tooltip("The lid of the survivor's pod, on its hinge.")] Transform podLid;
         [SerializeField, Tooltip("The vault's hall, inside the hill.")] Collider hall;
         [SerializeField] AudioClip crackClip, openClip;
+        [SerializeField, Tooltip("The survivor's pod panel, shrieking when they wake, and its alarm.")] Touchable podPanel;
+        [SerializeField] AudioSource podAlarm;
+        [SerializeField, Tooltip("Mr. Okafor's pod, which fails while the survivor watches.")] PodLights pod9;
+        [SerializeField, Tooltip("The ice holding the vault door in its frame.")] Frozen doorIce;
+        [SerializeField, Tooltip("Plays what is remembered or recorded, not heard in the world.")] AudioSource memory;
+        [SerializeField] AudioClip panelClip, swellClip, flashOneClip, recordingClip, imaClip;
         [SerializeField, Tooltip("The middle of the world, and how far from it the blizzard begins.")] Vector2 middle = new Vector2(0f, 120f);
         [SerializeField] float blizzardFrom = 300f;
         [SerializeField] Warmth warmth;
@@ -203,7 +209,7 @@ namespace Game
         Stage stage = Stage.Wake;
         string survivorName = "";
         bool arrived, handling, ended, logOpen, reflecting;
-        int lines, ideas;
+        int lines, ideas, quietLines;
         float quietSince;
         string ideaStage;
         Bond bond;
@@ -265,6 +271,7 @@ namespace Game
             traveller.Placed += _ => Progress();
             body.Stepped += (foot, pace) => Step(Footstep(), 0.25f + 0.12f * pace);
             if (gate) gate.Moved += open => { if (open) Beat("door", Line("The door's open!", "HAPPY")); };
+            if (doorIce) doorIce.Freed += _ => Beat("vault door", DoorGives, OpenVault);
             if (heartCase) heartCase.Freed += _ => Beat("heart free", Line("It's free. It's heavy, so you'll have to carry it. Pick it up with E.", "HAPPY"), () => Hint("[E] pick up the heart", 8f));
             if (mirrorJoint) mirrorJoint.Freed += _ => { Beat("joint free", Line("The joint's free. It can turn now.", "HAPPY")); Progress(); };
             if (socket) socket.Filled += () =>
@@ -373,12 +380,17 @@ namespace Game
             follow.EndShot();
             drone.Release();
             if (podLid) podLid.localRotation *= Quaternion.Euler(0f, -115f, 0f);
-            if (vaultDoor && !doorOpen) vaultDoor.localRotation *= Quaternion.Euler(0f, -100f, 0f);
+            if (vaultDoor && !doorOpen) vaultDoor.localRotation *= Quaternion.Euler(0f, DoorSwing, 0f);
             doorOpen = true;
             told.Add("vault door");
             told.Add("outside");
+            foreach (string beat in new[] { "door frozen", "door nudge", "ima", "pod 9" }) told.Add(beat);
+            if (doorIce) doorIce.Thaw();
+            StopAlarm();
+            if (podPanel) podPanel.Ready = false;
+            rambled = Rambles.Length;
             hud.Frost(0f);
-            if (vaultDoor) traveller.Place(new Vector3(vaultDoor.position.x + 1.75f, traveller.transform.position.y, vaultDoor.position.z + 6f), 0f);
+            if (vaultDoor) traveller.Place(new Vector3(vaultDoor.position.x + 1.2f, traveller.transform.position.y, vaultDoor.position.z + 6f), 0f);
             drone.Snap();
         }
 
@@ -433,13 +445,14 @@ namespace Game
                 yield return null;
             }
             drone.Beam(null);
-            // The lid gives and swings open; cold air.
+            // The lid gives and swings open; cold air. The pod knows it has let its sleeper go, and shrieks.
             if (steps && crackClip) steps.PlayOneShot(crackClip, 1f);
             if (podLid)
             {
                 var shut = podLid.localRotation;
                 StartCoroutine(Tween(1.4f, k => podLid.localRotation = shut * Quaternion.Euler(0f, -115f * Mathf.SmoothStep(0f, 1f, k), 0f)));
             }
+            StartAlarm();
             StartCoroutine(Tween(1.6f, k => hud.Frost(1f - k)));
             yield return new WaitForSeconds(1f);
             if (music && music.clip)
@@ -459,16 +472,143 @@ namespace Game
             yield return new WaitForSeconds(1.1f);
             traveller.Drive = Vector2.zero;
             if (ambience) StartCoroutine(Tween(3f, k => ambience.volume = ambienceVolume * (0.5f + 0.5f * k)));
-            yield return Speak("I'm Spark. I heard your pod crack from three rooms away.", "CALM");
+            // Their pod's panel is shrieking. Spark has never managed to quiet it; the survivor's hands can.
+            yield return Panel();
             traveller.Scripted = false;
             arrived = true;
             stage = Stage.Cross;
+            // Spark saw them go still.
+            yield return Speak("You went somewhere just now. Where did you go?", "CURIOUS");
+            hud.ShowHint("[Q] hold and speak   [Tab] write");
+            quietSince = Time.time;
+            int heard = lines;
+            while (lines == heard && Time.time - quietSince < 9f) yield return null;
+            while (handling || drone.Busy) yield return null;
+            yield return new WaitForSeconds(0.5f);
+            yield return Speak("I'm Spark. I heard your pod crack from three rooms away.", "CALM");
             yield return Speak("Do you have a name? Your label's frosted over.", "CURIOUS");
             hud.ShowHint("[Q] hold and speak   [Tab] write   [W A S D] walk   [Mouse] look");
             quietSince = Time.time;
-            while (lines == 0 && Time.time - quietSince < 30f) yield return null;
+            heard = lines;
+            rambleFrom = Time.time;
+            while (lines == heard && Time.time - quietSince < 15f) yield return null;
             hud.HideHint();
         }
+
+        /// <summary>
+        /// Their pod's panel shrieks for the sleeper it let go. Spark has never managed to quiet it; the
+        /// survivor's hands know how without thinking, and the touch brings back the first memory.
+        /// </summary>
+        IEnumerator Panel()
+        {
+            if (!podPanel) yield break;
+            Vector3 panelAt = podPanel.transform.position + Vector3.up * 0.6f;
+            // Spark goes to hover beside the panel, away from the pod; the view turns round to it.
+            Vector3 aside = Flat(podPanel.transform.position - (podLid ? podLid.parent.position : traveller.transform.position));
+            aside = aside.sqrMagnitude > 0.01f ? aside.normalized : Vector3.right;
+            drone.GoTo = panelAt + aside * 0.75f + Vector3.up * 0.55f + Flat(traveller.transform.position - panelAt).normalized * 0.35f;
+            drone.LookAt = traveller.transform.position + Vector3.up * 1.5f;
+            float fromYaw = follow.Yaw, toYaw = Yaw(panelAt) - 34f, fromPitch = follow.Pitch;
+            yield return Tween(1.6f, k =>
+            {
+                float s = Mathf.SmoothStep(0f, 1f, k);
+                follow.Face(Mathf.LerpAngle(fromYaw, toYaw, s), Mathf.Lerp(fromPitch, 6f, s));
+            });
+            drone.LookAt = panelAt;
+            yield return Speak("That's your pod. It's angry it let you go. Can you make it stop? I've never managed.", "WORRIED");
+            drone.LookAt = traveller.transform.position + Vector3.up * 1.5f;
+            traveller.Scripted = false;
+            bool touched = false;
+            Action quiet = () => touched = true;
+            podPanel.Touched += quiet;
+            podPanel.Ready = true;
+            hud.ShowHint("[E] touch the panel   [W A S D] walk   [Mouse] look");
+            yield return new WaitForSeconds(1.5f);
+            drone.Release();
+            float since = Time.time;
+            int nudges = 0;
+            string[] nudge = { "It's still crying. The panel, beside your pod.", "Please? It's been shrieking since you woke. The panel." };
+            while (!touched)
+            {
+                if (Time.time - since > 20f && nudges < nudge.Length && !drone.Busy)
+                {
+                    since = Time.time;
+                    StartCoroutine(Speak(nudge[nudges++], "WORRIED"));
+                }
+                yield return null;
+            }
+            podPanel.Touched -= quiet;
+            podPanel.Ready = false;
+            hud.HideHint();
+            StopAlarm();
+            if (steps && panelClip) steps.PlayOneShot(panelClip, 0.9f);
+            yield return new WaitForSeconds(0.5f);
+            yield return Memory(flashOneClip, "Sleep cycle stable. Wake me when it's over.");
+            bond.Event("flash_1", 2, "When the survivor touched their pod's shrieking panel, their hands knew exactly what to press, without thinking, and it went quiet. Then they went still for a moment, as if listening to something you could not hear", 6, Time.time);
+        }
+
+        Coroutine alarming;
+
+        void StartAlarm()
+        {
+            if (!podAlarm || podAlarm.isPlaying) return;
+            podAlarm.Play();
+            var lamp = podPanel ? podPanel.GetComponentInChildren<Light>() : null;
+            if (lamp) alarming = StartCoroutine(Blink(lamp));
+        }
+
+        void StopAlarm()
+        {
+            if (podAlarm) podAlarm.Stop();
+            if (alarming != null) StopCoroutine(alarming);
+            alarming = null;
+            var lamp = podPanel ? podPanel.GetComponentInChildren<Light>() : null;
+            if (lamp) lamp.intensity = 0f;
+        }
+
+        static IEnumerator Blink(Light lamp)
+        {
+            while (lamp)
+            {
+                lamp.intensity = Mathf.Repeat(Time.time * 2f, 1f) < 0.5f ? 1.2f : 0.05f;
+                yield return null;
+            }
+        }
+
+        /// <summary>
+        /// A memory that is not Spark's: the hall goes pale and far, a swell rises, and the survivor's own
+        /// voice from long ago says one line. Then it is gone.
+        /// </summary>
+        IEnumerator Memory(AudioClip line, string words)
+        {
+            traveller.Scripted = true;
+            if (memory && swellClip) memory.PlayOneShot(swellClip, 0.8f);
+            yield return Tween(1.3f, k =>
+            {
+                hud.White = 0.34f * k * (0.8f + 0.2f * Mathf.PerlinNoise(Time.time * 7f, 0.3f));
+                hud.Frost(0.65f * k);
+            });
+            if (memory && line) memory.PlayOneShot(line, 1f);
+            float length = line ? line.length : 3f;
+            for (float t = 0f; t < length + 0.8f; t += Time.deltaTime)
+            {
+                hud.White = 0.28f + 0.08f * Mathf.PerlinNoise(Time.time * 6f, 1.7f);
+                hud.Voice("YOU, LONG AGO", words, Mathf.Clamp01(t / (length * 0.9f)));
+                yield return null;
+            }
+            hud.VoiceFade(3f);
+            yield return Tween(1.8f, k =>
+            {
+                hud.White = 0.32f * (1f - k);
+                hud.Frost(0.65f * (1f - k));
+            });
+            hud.White = 0f;
+            hud.Frost(0f);
+            traveller.Scripted = false;
+        }
+
+        /// <summary>How far the blast door turns on its hinge to open: inward, till it lies against the passage wall.</summary>
+        const float DoorSwing = 88f;
 
         /// <summary>At the vault door from inside: Spark opens it, and the world is there.</summary>
         IEnumerator OpenVault()
@@ -479,15 +619,124 @@ namespace Game
             yield return new WaitForSeconds(0.8f);
             if (vaultDoor)
             {
-                drone.Beam(vaultDoor.position + vaultDoor.right * 1.75f);
+                drone.Beam(vaultDoor.position + vaultDoor.right * 1.33f);
                 if (steps && openClip) steps.PlayOneShot(openClip, 0.9f);
                 var shut = vaultDoor.localRotation;
-                yield return Tween(3f, k => vaultDoor.localRotation = shut * Quaternion.Euler(0f, -100f * Mathf.SmoothStep(0f, 1f, k), 0f));
+                yield return Tween(3f, k => vaultDoor.localRotation = shut * Quaternion.Euler(0f, DoorSwing * Mathf.SmoothStep(0f, 1f, k), 0f));
                 drone.Beam(null);
             }
             doorOpen = true;
             drone.Release();
         }
+
+        /// <summary>At the door from inside: frozen into its frame. Spark can't shift it, and says what might.</summary>
+        IEnumerator DoorFrozen()
+        {
+            var at = landmarks.FirstOrDefault(l => l && l.Id == "VAULT_DOOR");
+            if (at)
+            {
+                Vector3 toSurvivor = Flat(traveller.transform.position - at.Point);
+                drone.GoTo = at.Point + Vector3.up * 0.5f + (toSurvivor.sqrMagnitude > 0.01f ? toSurvivor.normalized : Vector3.back) * 1.3f;
+                drone.LookAt = at.Point;
+            }
+            yield return Speak("That's the way out. It's frozen into its frame. Everything in here is.", "SAD");
+            yield return Speak("I've tried for two hundred years. I'm not strong. I'm small.", "SORRY");
+            yield return Speak("But I can make things, if you tell me what. And ice doesn't like heat.", "CURIOUS");
+            drone.Release();
+            hud.ShowHint("Ask Spark to make something:   [Q] hold and speak   [Tab] write");
+            doorHintAt = Time.time;
+        }
+
+        float doorHintAt = -1f;
+
+        /// <summary>The door's ice gives way.</summary>
+        IEnumerator DoorGives()
+        {
+            hud.HideHint();
+            yield return new WaitForSeconds(0.8f);
+            bond.Event("door_thawed", 6, "Together you freed the vault door from its ice: the door you could not shift for two hundred years", 8, Time.time);
+            yield return Speak("It gave! Two hundred years, and it gave. You're good at this.", "HAPPY");
+        }
+
+        /// <summary>Pods 11 and 12: Ima and her mother. Spark visits them first, every morning. Ima left it something.</summary>
+        IEnumerator ImaPods()
+        {
+            var ima = landmarks.FirstOrDefault(l => l && l.Id == "POD_11");
+            if (ima)
+            {
+                Vector3 toSurvivor = Flat(traveller.transform.position - ima.Point);
+                drone.GoTo = ima.Point + Vector3.up * 0.8f + (toSurvivor.sqrMagnitude > 0.01f ? toSurvivor.normalized : Vector3.right) * 1.2f;
+                drone.LookAt = ima.Point;
+            }
+            yield return Speak("Eleven and twelve. Ima and her mother. I visit them first, every morning.", "SAD");
+            yield return new WaitForSeconds(0.8f);
+            yield return Speak("She left me something, the night she went to sleep. Listen.", "SAD");
+            if (memory && recordingClip) memory.PlayOneShot(recordingClip, 0.7f);
+            yield return new WaitForSeconds(1f);
+            if (imaClip) yield return drone.Speak("Spark? It's me. Keep the lights on till we come back, okay? ... Promise.", "SAD", hud, "IMA, RECORDED", false, imaClip);
+            yield return new WaitForSeconds(1.4f);
+            yield return Speak("I kept them on. Most of them.", "SAD");
+            bond.Event("ima_recording", 3, "You played the survivor Ima's recording: her voice, asking you to keep the lights on till they come back. You have never played it for anyone", 7, Time.time);
+            drone.Release();
+            imaHeard = Time.time;
+        }
+
+        float imaHeard = -1f;
+
+        /// <summary>Mr. Okafor's pod fails while they watch: amber to red. Spark goes quiet.</summary>
+        IEnumerator PodNine()
+        {
+            var okafor = landmarks.FirstOrDefault(l => l && l.Id == "POD_9");
+            if (!okafor || !pod9) yield break;
+            Vector3 toSurvivor = Flat(traveller.transform.position - okafor.Point);
+            drone.GoTo = okafor.Point + Vector3.up * 0.7f + (toSurvivor.sqrMagnitude > 0.01f ? toSurvivor.normalized : Vector3.right) * 1.3f;
+            drone.LookAt = okafor.Point;
+            yield return Speak("Wait.", "SCARED");
+            yield return new WaitForSeconds(0.6f);
+            yield return pod9.Fail();
+            yield return new WaitForSeconds(2.4f);
+            yield return Speak("Pod nine. Mr. Okafor. He taught music at the school.", "SAD");
+            bond.Event("pod_9", 0, "Pod 9 failed while you both watched: its light went from amber to red. Mr. Okafor, who taught music at the school. The cold is winning; only the mirror's light could save the rest", 8, Time.time);
+            yield return new WaitForSeconds(1.2f);
+            drone.Release();
+        }
+
+        // In the hall Spark can't stop talking: it hasn't had anyone to talk to in two hundred years.
+        // Each time it talks on its own, it is about something else.
+        static readonly string[] Rambles =
+        {
+            "the two hundred years alone down here: one thing you did to pass the time, said lightly",
+            "Ima: one small, particular memory of her (a game she played with you, something she said, the bath)",
+            "a question about the survivor, the kind you'd ask someone you have waited a very long time to talk to",
+            "something you notice in the picture right now, said the way a friend would; not an offer to make anything",
+            "one of the sleepers, by pod number: an ordinary, particular thing about who they were",
+            "yourself: a small, funny admission about being a cheap home helper (you can make toast, and nobody has asked in two hundred years)",
+            "your nest by the door and the things you kept there, a little embarrassed",
+            "the last night, when the hall was full of people going to sleep: one thing you remember",
+        };
+        int rambled;
+        float rambleFrom = -1f;
+
+        IEnumerator Ramble()
+        {
+            if (ended || rambled >= Rambles.Length) yield break;
+            int which = rambled++;
+            var ids = Ids();
+            drone.Thinking = true;
+            // Only the line about what it sees needs a picture (it costs a shutter and a blink).
+            byte[] picture = which == 3 ? drone.Picture(traveller.AimPoint ?? follow.View.transform.position + follow.View.transform.forward * 20f) : null;
+            Turn turn = null;
+            yield return mind.Think($"(The survivor is quiet. You have not had anyone to talk to in two hundred years and you can't help it: you talk. Say one or two short sentences in your own voice about {Rambles[which]}. It must be something you have not said before. No steps.)",
+                Moment(""), ids.Keys.ToList(), picture, t => turn = t);
+            drone.Thinking = false;
+            if (turn == null || string.IsNullOrWhiteSpace(turn.Say)) yield break;
+            turn.Steps.Clear();
+            Remember("you", turn.Say);
+            Log("(ramble)", false, Mind.Describe(turn), turn.Seconds, turn.Source);
+            yield return drone.Speak(turn.Say, turn.Mood, hud, droneName);
+        }
+
+        bool InHall(Vector3 p) => hall && hall.bounds.Contains(p + Vector3.up);
 
         // ---- Lines in, turns out ----
 
@@ -866,7 +1115,25 @@ namespace Game
             {
                 yield return new WaitForSeconds(0.25f);
                 Vector3 p = traveller.transform.position;
-                if (!doorOpen && vaultDoor && Vector3.Distance(p, vaultDoor.position) < 6f) Beat("vault door", OpenVault);
+                // The vault: Ima's pods and her recording, then pod 9 failing, then the door frozen in its frame.
+                var ima = landmarks.FirstOrDefault(l => l && l.Id == "POD_11");
+                if (ima && InHall(p) && Mathf.Abs(p.z - ima.Point.z) < 2.2f) Beat("ima", ImaPods);
+                var okafor = landmarks.FirstOrDefault(l => l && l.Id == "POD_9");
+                if (okafor && pod9 && imaHeard > 0f && Time.time - imaHeard > 5f && InHall(p) && Mathf.Abs(p.z - okafor.Point.z) < 8f) Beat("pod 9", PodNine);
+                if (!doorOpen && vaultDoor && Vector3.Distance(p, vaultDoor.position) < 7f)
+                {
+                    if (doorIce && !doorIce.Free) Beat("door frozen", DoorFrozen);
+                    else if (!doorIce) Beat("vault door", OpenVault);
+                }
+                if (doorIce && !doorIce.Free && doorHintAt > 0f && Time.time - doorHintAt > 35f && Time.time - quietSince > 20f && !Busy)
+                    Beat("door nudge", Line("I could make a fire beside it. Want me to?", "CURIOUS"));
+                // In the hall, Spark rambles: after a little quiet it talks on its own, about something new each time.
+                if (rambleFrom > 0f && rambled < Rambles.Length && InHall(p) && !handling && !Busy && !drone.Busy && !talk.Listening && !say.IsOpen
+                    && Time.time - quietSince > 9f + rambled * 2f && Time.time - rambleFrom > 8f)
+                {
+                    quietSince = Time.time;
+                    beats.Enqueue(Ramble);
+                }
                 if (doorOpen && vaultDoor && p.z > vaultDoor.position.z + 3f && !told.Contains("outside"))
                 {
                     Beat("outside", Line("That's the sun. What's left of it. The great minds put it in a cage.", "SAD"),
@@ -1005,8 +1272,15 @@ namespace Game
             drone.Thinking = true;
             byte[] picture = drone.Picture(traveller.AimPoint ?? follow.View.transform.position + follow.View.transform.forward * 20f);
             Turn idea = null;
-            string before = offered.Count == 0 ? "" : " You already offered these; offer something different, or simply say something about what you see or about yourself: " + string.Join(" / ", offered.Select(o => "\"" + o + "\"")) + ".";
-            yield return mind.Think("(The survivor has gone quiet for a while. Say one thing, one or two sentences: an idea for what to do next as a question they can say yes to, or a thought of your own about what you see." + before + " Do not act yet: no steps.)", Moment(""), ids.Keys.ToList(), picture, t => idea = t);
+            string before = offered.Count == 0 ? "" : " You already said these when they were quiet; say something different: " + string.Join(" / ", offered.Select(o => "\"" + o + "\"")) + ".";
+            // Each quiet line is a different kind of thing, so it doesn't keep offering the same help.
+            string kind = (quietLines++ % 3) switch
+            {
+                0 => "an idea for what to do next, as a question they can say yes to",
+                1 => "a thought of your own about what you see; not an offer, and nothing about lamps or light",
+                _ => "a small memory of Ima or the town as it was, or a question about them",
+            };
+            yield return mind.Think("(The survivor has gone quiet for a while. Say one thing, one or two sentences: " + kind + "." + before + " Do not act yet: no steps.)", Moment(""), ids.Keys.ToList(), picture, t => idea = t);
             drone.Thinking = false;
             idea.Steps.Clear();
             offered.Add(idea.Say);
@@ -1093,7 +1367,7 @@ namespace Game
                     sunlight.color = Color.Lerp(sunColourFrom, new Color(1f, 0.7f, 0.45f), k);
                 }
                 if (vaultLight) vaultLight.intensity = 12f * k;
-                if (vaultDoor) vaultDoor.localRotation = Quaternion.Euler(0f, -85f * Mathf.SmoothStep(0f, 1f, k), 0f);
+                if (vaultDoor) vaultDoor.localRotation = Quaternion.Euler(0f, DoorSwing * Mathf.SmoothStep(0f, 1f, k), 0f);
                 if (snow)
                 {
                     var emission = snow.emission;
@@ -1162,6 +1436,8 @@ namespace Game
             if (landmark && landmark.GetComponentInParent<Frozen>()) clear = 1.4f;
             else if (id == "DOOR" || id == "MIRROR" || id == "SOCKET" || id == "STATION") clear = 2f;
             else if (id == "AIM" && traveller.AimedIce) clear = 1.4f;
+            // Looking at a wall or a door, not the floor: in front of it, toward the survivor.
+            else if (id == "AIM" && at.y - survivor.y > 0.6f) clear = 1.2f;
             if (clear > 0f)
             {
                 Vector3 away = Flat(survivor - at);
@@ -1230,10 +1506,18 @@ namespace Game
             }
             if (warmth && warmth.Value < 0.99f) text.Append($"The survivor's warmth: {warmth.Value * 100f:F0}% (the machines' fire takes it; fires give it back).\n");
             if (remembered.Count > 0) text.Append("What you know about them and keep in mind: ").Append(string.Join("; ", remembered)).Append(".\n");
+            // Everything it said before the recent words, so it says something new rather than the same things again.
+            var earlier = saidBefore.Take(Mathf.Max(0, saidBefore.Count - recent.Count(r => r.who == "you"))).ToList();
+            if (earlier.Count > 0)
+                text.Append("You have already said these to them; never say them again, nor repeat their facts, offers or questions (find something new): ")
+                    .Append(string.Join(" / ", earlier.Select(s => "\"" + s + "\""))).Append(".\n");
             text.Append("Recent words:").Append(recent.Count == 0 ? " none yet.\n" : "\n");
             foreach (var (who, said) in recent) text.Append("- ").Append(who).Append(": \"").Append(said).Append("\"\n");
             return text.ToString();
         }
+
+        /// <summary>Its own lines, oldest first, the last thirty.</summary>
+        readonly List<string> saidBefore = new List<string>();
 
         /// <summary>A landmark's words, with how it is now.</summary>
         string About(Landmark l)
@@ -1246,6 +1530,8 @@ namespace Game
                 "HEART" => heart && socket && socket.Full ? "set in the mirror's socket" : traveller.Holding == heart ? "in the survivor's hands" : heart && heart.Locked ? "in a cage under the Harvester's belly; it took it from the mirror" : "free, in the snow",
                 "MIRROR_JOINT" => mirrorJoint && mirrorJoint.Free ? "thawed and free" : mirrorJoint && mirrorJoint.Rate > 0.05f ? $"melting, {mirrorJoint.Progress * 100f:F0}% gone" : "frozen solid",
                 "SOCKET" => socket && socket.Full ? "the heart is in it" : "empty",
+                "VAULT_DOOR" => doorIce && doorIce.Free ? (doorOpen ? "thawed and open" : "thawed: it can open now") : doorIce && doorIce.Rate > 0.05f ? $"its ice melting, {doorIce.Progress * 100f:F0}% gone" : "frozen shut",
+                "POD_9" => pod9 && pod9.Failed ? "its light went red while you watched: it is failing, and nothing in here can stop it" : "its light amber: failing slowly",
                 _ => "",
             };
             if (string.IsNullOrEmpty(l.About)) return state;
@@ -1297,6 +1583,11 @@ namespace Game
             if (string.IsNullOrWhiteSpace(words)) return;
             recent.Add((who, words));
             if (recent.Count > 8) recent.RemoveAt(0);
+            if (who == "you")
+            {
+                saidBefore.Add(words);
+                if (saidBefore.Count > 30) saidBefore.RemoveAt(0);
+            }
         }
 
         // ---- Small things ----

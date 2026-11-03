@@ -31,6 +31,7 @@ namespace Game
         float melted, warmth, shake;
         int hit;
         Vector3 shellRest;
+        Renderer[] pieces = new Renderer[0];
         static readonly int BuildId = Shader.PropertyToID("_Build");
         static readonly int BuildRangeId = Shader.PropertyToID("_BuildRange");
 
@@ -40,12 +41,27 @@ namespace Game
             if (shell)
             {
                 shellRest = shell.transform.localPosition;
-                var block = new MaterialPropertyBlock();
-                shell.GetPropertyBlock(block);
-                block.SetVector(BuildRangeId, new Vector4(shell.bounds.min.y, Mathf.Max(shell.bounds.size.y, 0.05f), 0f, 0f));
-                block.SetFloat(BuildId, 1f);
-                shell.SetPropertyBlock(block);
+                // The ice may be in pieces under the shell (a seal round a door): they melt as one, from the top down.
+                pieces = shell.GetComponentsInChildren<Renderer>();
+                var bounds = shell.bounds;
+                foreach (var p in pieces) bounds.Encapsulate(p.bounds);
+                foreach (var p in pieces)
+                {
+                    var block = new MaterialPropertyBlock();
+                    p.GetPropertyBlock(block);
+                    block.SetVector(BuildRangeId, new Vector4(bounds.min.y, Mathf.Max(bounds.size.y, 0.05f), 0f, 0f));
+                    block.SetFloat(BuildId, 1f);
+                    p.SetPropertyBlock(block);
+                }
             }
+        }
+
+        /// <summary>Gone at once, without a sound (tests, and skipping ahead).</summary>
+        public void Thaw()
+        {
+            if (Free) return;
+            melted = needs;
+            Release(false, true);
         }
 
         /// <summary>Heat held to it this frame (a torch), in melt per second.</summary>
@@ -95,19 +111,23 @@ namespace Game
             {
                 shake = Mathf.MoveTowards(shake, 0f, dt * 4f);
                 shell.transform.localPosition = shellRest + UnityEngine.Random.insideUnitSphere * 0.03f * shake;
-                var block = new MaterialPropertyBlock();
-                shell.GetPropertyBlock(block);
-                block.SetFloat(BuildId, 1f - Progress * 0.85f);
-                shell.SetPropertyBlock(block);
+                foreach (var p in pieces)
+                {
+                    var block = new MaterialPropertyBlock();
+                    p.GetPropertyBlock(block);
+                    block.SetFloat(BuildId, 1f - Progress * 0.85f);
+                    p.SetPropertyBlock(block);
+                }
             }
             if (melted >= needs) Release(false);
         }
 
-        void Release(bool broken)
+        void Release(bool broken, bool quiet = false)
         {
             if (Free) return;
             Free = true;
-            if (sound)
+            if (sound && quiet) sound.Stop();
+            else if (sound)
             {
                 sound.Stop();
                 sound.loop = false;
@@ -129,6 +149,7 @@ namespace Game
             if (shell)
             {
                 foreach (var c in shell.GetComponentsInChildren<Collider>()) c.enabled = false;
+                foreach (var p in pieces) p.enabled = false;
                 shell.enabled = false;
             }
             foreach (var c in GetComponents<Collider>()) if (!c.isTrigger) c.enabled = false;

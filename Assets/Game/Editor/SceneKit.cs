@@ -204,6 +204,7 @@ namespace Game.Building
             var serialized = new SerializedObject(target);
             var property = serialized.FindProperty(field) ?? throw new ArgumentException($"{target.GetType().Name} has no serialized field '{field}'");
             if (value is bool flag) property.boolValue = flag;
+            else if (value is string text) property.stringValue = text;
             else if (value is Vector3 vector) property.vector3Value = vector;
             else if (property.propertyType == SerializedPropertyType.Integer) property.intValue = Convert.ToInt32(value);
             else property.floatValue = Convert.ToSingle(value);

@@ -180,6 +180,8 @@ namespace Game
         /// <summary>The height of the ground under a point, looking down from above it.</summary>
         public bool GroundAt(Vector3 p, out float height, float from = 30f)
         {
+            // Under a roof (in the vault), look down from just under it, not from on top of it.
+            if (Physics.Raycast(p, Vector3.up, out var roof, from, ground, QueryTriggerInteraction.Ignore)) from = Mathf.Max(0.05f, roof.distance - 0.05f);
             if (Physics.Raycast(new Vector3(p.x, p.y + from, p.z), Vector3.down, out var hit, from + 60f, ground, QueryTriggerInteraction.Ignore))
             {
                 height = hit.point.y;

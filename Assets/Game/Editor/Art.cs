@@ -108,6 +108,56 @@ namespace Game.Building
         /// <summary>The downloaded model, as glTFast imported it.</summary>
         public static GameObject Model(string id) => Load<GameObject>($"{Folder}/PolyHaven/{id}/{id}_1k.gltf");
 
+        /// <summary>A model from Sketchfab (CC Attribution or CC0; who made it is in progress/art-fetched.md and CREDITS.md).</summary>
+        public static GameObject Sketchfab(string name) => Load<GameObject>($"{Folder}/Sketchfab/{name}/{name}.glb");
+
+        /// <summary>
+        /// A model placed in its parent at a given height, standing with the middle of its base on a point,
+        /// turned as given. Sizes come from the meshes themselves through every transform inside the model
+        /// (downloaded models carry their own turns and scales). It casts shadows; no collider is added.
+        /// </summary>
+        public static GameObject Place(GameObject model, Transform parent, Vector3 foot, float height, Quaternion turn)
+        {
+            var made = (GameObject)PrefabUtility.InstantiatePrefab(model);
+            made.transform.SetParent(parent, false);
+            made.transform.localPosition = Vector3.zero;
+            made.transform.localRotation = turn;
+            made.transform.localScale = Vector3.one;
+            var box = Measure(made, parent);
+            float scale = height / Mathf.Max(0.001f, box.size.y);
+            made.transform.localScale = Vector3.one * scale;
+            box = Measure(made, parent);
+            made.transform.localPosition += foot - new Vector3(box.center.x, box.min.y, box.center.z);
+            foreach (var r in made.GetComponentsInChildren<Renderer>())
+            {
+                r.shadowCastingMode = ShadowCastingMode.On;
+                r.receiveShadows = true;
+            }
+            return made;
+        }
+
+        /// <summary>What the object draws, as a box in another transform's space (its meshes through every transform).</summary>
+        public static Bounds Measure(GameObject made, Transform space)
+        {
+            var toSpace = space ? space.worldToLocalMatrix : Matrix4x4.identity;
+            var bounds = new Bounds();
+            bool first = true;
+            foreach (var r in made.GetComponentsInChildren<Renderer>())
+            {
+                var mesh = r is SkinnedMeshRenderer s ? s.sharedMesh : r.GetComponent<MeshFilter>() ? r.GetComponent<MeshFilter>().sharedMesh : null;
+                if (!mesh) continue;
+                var b = mesh.bounds;
+                var m = toSpace * r.transform.localToWorldMatrix;
+                for (int i = 0; i < 8; i++)
+                {
+                    var corner = m.MultiplyPoint3x4(b.center + Vector3.Scale(b.extents, new Vector3(i & 1, (i >> 1) & 1, (i >> 2) & 1) * 2f - Vector3.one));
+                    if (first) { bounds = new Bounds(corner, Vector3.zero); first = false; }
+                    else bounds.Encapsulate(corner);
+                }
+            }
+            return bounds;
+        }
+
         /// <summary>
         /// A model placed in its parent, or one piece of a kit (by its name in the file), turned as given
         /// (the piece's own turn in the file is replaced). It casts shadows; when solid it gets a box

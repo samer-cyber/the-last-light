@@ -9,9 +9,17 @@ mounted_fluorescent_lights, caged_hanging_light, industrial_caged_sconce, modula
 
 **ambientCG** (https://ambientcg.com), textures, CC0: Concrete031, DiamondPlate008C, PaintedMetal006, Metal027. Each asset's page is `https://ambientcg.com/a/<name>`.
 
+## Art (CC BY 4.0, attribution required)
+
+**"Stasis / Clone Chamber (with animations)"** by **TampaJoey**, https://sketchfab.com/3d-models/8738f78ae4ec4630ac35a4783303ea95, licensed under Creative Commons Attribution 4.0 (https://creativecommons.org/licenses/by/4.0/). Used for the sleepers' pods in the vault; its glass and light materials are recoloured and the sleepers are posed from one frame of its animation.
+
+## Signs
+
+The vault's stencilled signs are painted by `tools/make_signs.py` with Windows' Stencil and Bahnschrift fonts.
+
 ## Sound and voice
 
-Sound effects, music and Spark's voice: ElevenLabs (https://elevenlabs.io). Spark's voice is "Game robot voice", designed by Samer with ElevenLabs Voice Design.
+Sound effects, music and Spark's voice: ElevenLabs (https://elevenlabs.io). Spark's voice is "Game robot voice", designed by Samer with ElevenLabs Voice Design. The survivor's remembered voice is the ElevenLabs library voice Daniel; Ima's recording is the library voice Kavya.
 
 ## AI
 

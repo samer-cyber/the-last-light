@@ -264,7 +264,7 @@ namespace Game.Building
             var landmarks = new List<Landmark>();
             var world = new GameObject("World").transform;
             var frost = MakeLit("Frost", new Color(0.72f, 0.82f, 0.92f), 0.7f, 0f);
-            var vault = MakeVault(world, cube, cylinder, ball, concrete, metal, warmWindow, glass, frost, light, landmarks);
+            var vault = MakeVault(world, cube, cylinder, ball, concrete, metal, warmWindow, glass, frost, light, ice, steamMaterial, landmarks);
             var vaultLight = vault.Light;
             var vaultDoor = vault.Door;
             // The survivor wakes in their pod, at the far end of the hall.
@@ -420,6 +420,13 @@ namespace Game.Building
                 ("jumpClip", FindClip("foley_jump_1")), ("landClip", FindClip("foley_land_1")));
             WireArray(director, "landmarks", landmarks.Cast<Object>().ToArray());
             Wire(director, ("podLid", vault.Lid), ("hall", vault.Hall), ("crackClip", FindClip("ice_crack")), ("openClip", FindClip("mirror_turn")));
+            // The vault's beats: the shrieking panel and the first memory, Ima's recording, pod 9, the frozen door.
+            var memory = MakeSource("Memory", director.transform, null, false);
+            Wire(director, ("podPanel", vault.Panel), ("podAlarm", vault.Alarm), ("pod9", vault.Pod9), ("doorIce", vault.DoorIce), ("memory", memory),
+                ("panelClip", FindClip("panel_touch")), ("swellClip", FindClip("memory_swell")), ("flashOneClip", FindClip("flash_1")),
+                ("recordingClip", FindClip("recording_click")), ("imaClip", FindClip("ima_recording")));
+            Wire(drone, ("curiousChirp", FindClip("spark_curious")), ("nervousChirp", FindClip("spark_nervous")), ("happyChirp", FindClip("spark_happy")),
+                ("sadChirp", FindClip("spark_sad")), ("thinkingHum", FindClip("spark_thinking")));
             SetValue(director, "harvesterAt", new Vector3(Arena.x, Height(Arena.x, Arena.y) + 6.2f, Arena.y + 6f));
             WireArray(director, "snowSteps", Clips("foley_step_snow", 6));
             WireArray(director, "stoneSteps", Clips("foley_step_stone", 6));

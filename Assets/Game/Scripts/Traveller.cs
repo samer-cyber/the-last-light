@@ -66,6 +66,8 @@ namespace Game
         public Frozen AimedIce { get; private set; }
         /// <summary>The machine the centre of the view rests on.</summary>
         public Machine AimedMachine { get; private set; }
+        /// <summary>A panel or switch in reach that [E] would touch: the one looked at, or the nearest in front.</summary>
+        public Touchable AimedTouch { get; private set; }
         /// <summary>When set, the head turns to this (the drone, while they talk).</summary>
         public Vector3? Attending { get; set; }
         /// <summary>The last time the survivor reached for something (the body animates it).</summary>
@@ -232,6 +234,13 @@ namespace Game
                 Release();
                 return;
             }
+            if (AimedTouch)
+            {
+                ReachedAt = Time.time;
+                ReachedFor = AimedTouch.transform.position;
+                AimedTouch.Touch();
+                return;
+            }
             if (!InReach || !InReach.CanHold) return;
             Take(InReach);
         }
@@ -321,7 +330,9 @@ namespace Game
             AimedIce = null;
             AimedMachine = null;
             aimedSocket = null;
+            AimedTouch = null;
             Holdable looked = null;
+            Touchable touched = null;
             // Small named things are seen by their own trigger; places are named by the region that
             // holds the point where the view meets the ground.
             var hits = Physics.RaycastAll(ray, 80f, seen, QueryTriggerInteraction.Collide);
@@ -344,6 +355,8 @@ namespace Game
                 AimedMachine = hit.collider.GetComponentInParent<Machine>();
                 if (AimedMachine && AimedMachine.Broken) AimedMachine = null;
                 looked = hit.collider.GetComponentInParent<Holdable>();
+                touched = hit.collider.GetComponentInParent<Touchable>();
+                if (touched && (!touched.Ready || Vector3.Distance(hit.point, transform.position) > reach + 0.6f)) touched = null;
                 AimedBuilt = hit.collider.GetComponentInParent<Built>();
                 AimedIce = hit.collider.GetComponentInParent<Frozen>();
                 Aimed = landmark && landmark.Known ? landmark : Region(hit.point);
@@ -368,6 +381,23 @@ namespace Game
                 }
             }
             InReach = Holding ? null : best;
+            // A panel to touch: the one looked at, else one close in front (a small thing is easy to miss with the view).
+            if (!Holding)
+            {
+                if (!touched && !InReach)
+                    foreach (var c in Physics.OverlapSphere(transform.position + Vector3.up * 1f, reach * 0.8f, ~0, QueryTriggerInteraction.Ignore))
+                    {
+                        var t = c.GetComponentInParent<Touchable>();
+                        if (!t || !t.Ready) continue;
+                        Vector3 to = Vector3.ProjectOnPlane(t.transform.position - transform.position, Vector3.up);
+                        if (Vector3.Dot(to.normalized, Vector3.ProjectOnPlane(camera.transform.forward, Vector3.up).normalized) > 0.2f)
+                        {
+                            touched = t;
+                            break;
+                        }
+                    }
+                AimedTouch = touched;
+            }
             if (!hud) return;
             if (Scripted)
             {
@@ -388,6 +418,7 @@ namespace Game
                     : tool ? tool.Kind == Tool.Use.Heat ? "   [Mouse] hold the flame to it" : tool.Kind == Tool.Use.Break ? "   [Mouse] strike" : "" : "";
                 hud.Aim(socket ? "the socket" : name, socket ? "[E] set the heart in it" : "[E] put down" + use);
             }
+            else if (AimedTouch) hud.Aim(AimedTouch.Title, "[E] " + AimedTouch.Verb);
             else if (InReach) hud.Aim(InReach.Title, "[E] pick up");
             else hud.Aim(name, null);
         }

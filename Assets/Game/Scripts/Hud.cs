@@ -411,6 +411,8 @@ namespace Game
             voiceWords.AddToClassList("hud__voice-words");
             voice.Add(voiceWords);
             white = Element("hud__white");
+            // The words stay readable over the white of a memory.
+            voice.PlaceInFront(white);
             title = new Label { pickingMode = PickingMode.Ignore };
             title.AddToClassList("hud__title");
             layer.Add(title);
