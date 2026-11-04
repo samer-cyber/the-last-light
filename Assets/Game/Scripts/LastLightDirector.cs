@@ -1525,7 +1525,8 @@ namespace Game
                     ShowGoal();
                 }
                 if (p.z > 28f && p.z < 110f && Mathf.Abs(p.x) < 60f)
-                    Beat("town", Line("That's Sunvale, under the snow. Ima's school is down there somewhere. Ask me what it looked like, if you want.", "SAD"));
+                    Beat("town", Line("That's Sunvale, under the snow. Ima's school is down there somewhere. Ask me what it looked like, if you want.", "SAD"),
+                        () => Hint("Look around Sunvale before the bridge: the school, the square, the houses. Ask Spark what you see, or how it was before.", 10f));
                 if (stage == Stage.Cross && farSide && farSide.bounds.Contains(p))
                 {
                     stage = Stage.Enter;
