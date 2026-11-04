@@ -99,8 +99,8 @@ namespace Game
             if (awake) return;
             awake = true;
             // Time to see it, hear Spark, and think: it stalks before its first sweep, and calls its pack later still.
-            nextAttack = Time.time + 14f;
-            nextPack = Time.time + 40f;
+            nextAttack = Time.time + 20f;
+            nextPack = Time.time + 60f;
             Woke?.Invoke();
         }
 
@@ -131,7 +131,7 @@ namespace Game
             if (Time.time > nextAttack && !sweeping && !charging && !venting && d < 45f) StartCoroutine(Sweep());
             if (Time.time > nextPack && makers && d < 50f)
             {
-                nextPack = Time.time + (Fraction < 0.5f ? 22f : 32f);
+                nextPack = Time.time + (Fraction < 0.5f ? 34f : 48f);
                 makers.Seekers(transform.position + transform.forward * 4f + Vector3.up * 3f, 2, 3f);
             }
             if (d < 6.5f && !sweeping && Time.time > nextAttack - 3f) StartCoroutine(Stomp());

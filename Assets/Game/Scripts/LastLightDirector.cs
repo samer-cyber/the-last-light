@@ -138,14 +138,16 @@ namespace Game
             ["white"] = ("No. Not into the white. Nothing that goes in there comes back out.", "SCARED"),
             ["harvester"] = ("That's a Harvester. That's what took the mirror's heart. It's in the cage, under its belly.", "SCARED"),
             ["vent"] = ("Its back's glowing. The vent. Its shield's down while it cools. Now!", "SURE"),
+            ["far seekers"] = ("Wait. Past the chasm, those little lights moving. Seekers. They hunt anything warm. Let's think before we get closer.", "WORRIED"),
+            ["far harvester"] = ("See the big one, by the station? That's a Harvester. It's what took the mirror's heart. We'll need a plan for that one.", "WORRIED"),
         };
 
         void Bark(string key, bool once = false)
         {
             if (once && told.Contains("bark " + key)) return;
             if (!Barks.TryGetValue(key, out var b)) return;
-            // Quick lines go straight out, not behind a thought in progress; never over another line.
-            if (barking || drone.Busy) return;
+            // Quick lines go out at once: their voices are made ahead of time, and they cut in over a ramble or a story.
+            if (barking) return;
             told.Add("bark " + key);
             StartCoroutine(Barking(b.line, b.mood));
         }
@@ -155,7 +157,7 @@ namespace Game
         IEnumerator Barking(string line, string mood)
         {
             barking = true;
-            yield return Speak(line, mood, true);
+            yield return Speak(line, mood, false, Drone.Kind.Answer);
             barking = false;
         }
 
@@ -184,6 +186,12 @@ namespace Game
                         if (!s.Prey.IsSurvivor && d < 40f) Bark("lured", true);
                     }
                     if (d < nearest) { nearest = d; threat = m; }
+                    // Seen from far off, before they are close: Spark points them out.
+                    if (d < 95f && d > 30f && !m.Broken)
+                    {
+                        if (m is Seeker) Bark("far seekers", true);
+                        else if (m is Harvester) Bark("far harvester", true);
+                    }
                 }
                 drone.Cover = threat ? threat.transform.position : (Vector3?)null;
             }
@@ -1479,7 +1487,7 @@ namespace Game
                 if (doorOpen && vaultDoor && p.z > vaultDoor.position.z + 3f && !told.Contains("outside") && breached.Contains("LEAVE"))
                 {
                     Beat("outside", Line("That's the sun. What's left of it. The great minds put it in a cage.", "SAD"),
-                        Line("The mirror on the cliff, far off, could warm the vault again and wake them. But a Harvester took its heart.", "WORRIED"));
+                        Line("See that glint on the cliff, far off? That's the sun mirror. It could warm the vault and wake them. But a Harvester took its heart.", "WORRIED"));
                     ShowGoal();
                 }
                 if (p.z > 28f && p.z < 110f && Mathf.Abs(p.x) < 60f)

@@ -225,10 +225,11 @@ namespace Game.Building
                 if (fallen)
                 {
                     // Caved in under two centuries of snow: tilted, and sunk to the windows.
-                    model.transform.rotation = Quaternion.AngleAxis(R(6f, 13f), Quaternion.Euler(0f, R(0f, 360f), 0f) * Vector3.right) * model.transform.rotation;
+                    model.transform.rotation = Quaternion.AngleAxis(R(4f, 8f), Quaternion.Euler(0f, R(0f, 360f), 0f) * Vector3.right) * model.transform.rotation;
                 }
                 var b = Measure(model);
-                float sink = fallen ? b.size.y * R(0.35f, 0.55f) : 0.2f;
+                // Two centuries of snow lie the same depth on the whole town: every house is in it to the windowsills.
+                float sink = 1.1f + (fallen ? b.size.y * R(0.1f, 0.18f) : 0f);
                 model.transform.position += new Vector3(at.x - b.center.x, ground - sink - b.min.y, at.z - b.center.z);
                 foreach (var r in model.GetComponentsInChildren<Renderer>())
                 {
@@ -244,7 +245,7 @@ namespace Game.Building
                 house.SetParent(root, false);
                 houseSpots.Add(at);
                 float w = R(6f, 9f), d = R(7f, 10f), h = R(4f, 7.5f);
-                bool fallen = random.NextDouble() < 0.33;
+                bool fallen = random.NextDouble() < 0.2;
                 var turn = Quaternion.Euler(0f, yaw, 0f);
                 float ground = Height(at.x, at.z);
                 // Standing houses near the main street face it; the scattered ones face where they were built to.

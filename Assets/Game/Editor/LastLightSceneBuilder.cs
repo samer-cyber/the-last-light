@@ -345,6 +345,29 @@ namespace Game.Building
                 $"a shelf {topY - footY:F0} m above the ground below the cliff, where the sun mirror stands", new Vector3(300f, 4f, 12f)));
             var sunShaft = MakeParticleMaterial("Mirror Shaft", softLine, 2.2f);
             var mirrorParts = MakeMirror(world, new Vector3(MirrorAt.x, topY, MirrorAt.y), cube, cylinder, sphere, metal, oldIce, light, sunShaft, steamMaterial, vaultDoor, landmarks, travellerObject.transform);
+            // It still catches a little of the caged sun: a faint glint on the clifftop, seen from the town, so the survivor
+            // can see where it stands.
+            var glintLook = MakeMaterial("Mirror Glint", "Game/Halo", m =>
+            {
+                m.SetColor("_Color", new Color(1f, 0.93f, 0.78f));
+                m.SetFloat("_Edge", 0.14f);
+                m.SetFloat("_Intensity", 1.2f);
+            });
+            glintLook.renderQueue = 3100;
+            // On an old mast beside the dish, tall enough to stand over the cliff's edge from the town.
+            var mirrorAt = mirrorParts.Mirror.transform;
+            var mast = MakePart("Mirror Mast", mirrorAt, cylinder, metal, 1f);
+            mast.transform.position = mirrorAt.position + new Vector3(3.2f, 9f, 1.8f);
+            mast.transform.localScale = new Vector3(0.32f, 9f, 0.32f) / Mathf.Max(mirrorAt.lossyScale.x, 0.01f);
+            mast.shadowCastingMode = ShadowCastingMode.On;
+            var arm = MakePart("Mirror Mast Arm", mirrorAt, cube, metal, 1f);
+            arm.transform.position = mirrorAt.position + new Vector3(3.2f, 17.2f, 1.8f);
+            arm.transform.localScale = new Vector3(2.4f, 0.16f, 0.16f) / Mathf.Max(mirrorAt.lossyScale.x, 0.01f);
+            var glint = MakePart("Mirror Glow", mirrorAt, billboard, glintLook, 1f);
+            glint.transform.position = mirrorAt.position + new Vector3(3.2f, 18.3f, 1.8f);
+            glint.transform.localScale = Vector3.one * 15f / Mathf.Max(mirrorParts.Mirror.transform.lossyScale.x, 0.01f);
+            glint.shadowCastingMode = ShadowCastingMode.Off;
+            glint.gameObject.AddComponent<Glint>();
 
             // The great minds' slabs, dead now, and a few boulders.
             var slabs = new GameObject("Slabs").transform;

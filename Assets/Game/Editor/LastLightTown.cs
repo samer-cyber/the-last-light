@@ -609,6 +609,34 @@ namespace Game.Building
             // One fallen across a yard.
             ModelAt("DeadTreeTall", trees, "Fallen Tree", On(20f, 84f), Quaternion.Euler(0f, 30f, 84f), 8.5f, true, -0.3f, 0f);
 
+            // ---- The dead forest beyond the town: groves on the valley's sides and past the chasm ----
+            var forest = new GameObject("Dead Forest").transform;
+            forest.SetParent(root, false);
+            var groves = new List<Vector2>();
+            for (int i = 0; i < 400 && groves.Count < 18; i++)
+            {
+                float x = R(-170f, 170f), z = R(-20f, 250f);
+                bool beyond = z > 162f;
+                var p = new Vector2(x, z);
+                if (!beyond && Mathf.Abs(x) < 86f) continue;
+                if (z > 130f && z < 164f) continue;
+                if (beyond && x > -34f && x < 64f) continue;
+                if ((p - StationAt).magnitude < 32f || (p - Arena).magnitude < 46f || (p - Lake).magnitude < 50f || (p - VaultHill).magnitude < 42f) continue;
+                if (groves.Any(g => (g - p).magnitude < 28f)) continue;
+                groves.Add(p);
+            }
+            foreach (var g in groves)
+            {
+                int count = random.Next(4, 9);
+                for (int k = 0; k < count; k++)
+                {
+                    float a = R(0f, Mathf.PI * 2f), r = R(0f, 11f);
+                    bool tall = random.NextDouble() < 0.6;
+                    ModelAt(tall ? "DeadTreeTall" : "DeadTree", forest, "Dead Tree", On(g.x + Mathf.Cos(a) * r, g.y + Mathf.Sin(a) * r),
+                        Quaternion.Euler(R(-6f, 6f), R(0f, 360f), R(-6f, 6f)), tall ? R(8f, 12f) : R(5f, 8f), true, 0.4f, 0f);
+                }
+            }
+
             // ---- Drifts against the houses, on the side the wind comes from ----
             var drifts = new GameObject("Drifts").transform;
             drifts.SetParent(root, false);
@@ -624,6 +652,31 @@ namespace Game.Building
                 On(6.4f, 17f), Vector3.back, 3.2f, 1.6f, 1.1f, 4f, "WELCOME TO SUNVALE. POP. 2,180");
             landmarks.Add(MakeLandmark("Welcome Sign Place", root, On(6.4f, 17f) + Vector3.up * 1.9f, "TOWN_SIGN", "the town's sign",
                 "a weathered sign at the edge of town: \"WELCOME TO SUNVALE. POP. 2,180\"", new Vector3(3.4f, 1.8f, 0.6f)));
+
+            // ---- The way to the sun mirror: two road signs on the main street, and the town's old poster of it ----
+            var mirrorRoad = Load<Texture2D>($"{Root}/Textures/Signs/Mirror Road.png");
+            Signboard("Mirror Road Sign", root, cube, quad, wood, mirrorRoad, "a road sign", On(4.4f, 27f), Vector3.back, 1.5f, 1f, 1.3f, 3f,
+                "SUN MIRROR. CLIFF ROAD, STRAIGHT ON (an arrow pointing north, through the town and over the bridge)");
+            Signboard("Mirror Road Sign", root, cube, quad, wood, mirrorRoad, "a road sign", On(4.4f, 124f), Vector3.back, 1.5f, 1f, 1.3f, -4f,
+                "SUN MIRROR. CLIFF ROAD, STRAIGHT ON (an arrow pointing north, over the bridge)");
+            Signboard("Mirror Poster", root, cube, quad, wood, Load<Texture2D>($"{Root}/Textures/Signs/Mirror Poster.png"), "the town's old poster of the sun mirror",
+                On(-9f, 63f), Vector3.right, 2.4f, 1.5f, 0.9f, -3f,
+                "SUNVALE SUN MIRROR. IT KEEPS THE VALLEY WARM. (a painting of the great dish on its tower on the clifftop north of town, catching the sun and throwing its light down onto the town and the vault)");
+            var posterLamp = new GameObject("Poster Lamp").AddComponent<Light>();
+            posterLamp.transform.SetParent(root, false);
+            posterLamp.transform.position = On(-9f, 63f) + new Vector3(1.6f, 3.4f, 0f);
+            posterLamp.transform.rotation = Quaternion.LookRotation(On(-9f, 63f) + Vector3.up * 1.6f - posterLamp.transform.position, Vector3.up);
+            posterLamp.type = LightType.Spot;
+            posterLamp.spotAngle = 75f;
+            posterLamp.innerSpotAngle = 40f;
+            posterLamp.range = 8f;
+            posterLamp.intensity = 5f;
+            posterLamp.color = new Color(1f, 0.82f, 0.58f);
+            posterLamp.shadows = LightShadows.None;
+            posterLamp.gameObject.AddComponent<Flicker>();
+            landmarks.Add(MakeLandmark("Mirror Poster Place", root, On(-9f, 63f) + Vector3.up * 1.7f, "MIRROR_POSTER", "the old poster of the sun mirror",
+                "a faded town poster by the square: SUNVALE SUN MIRROR, IT KEEPS THE VALLEY WARM, with a painting of the dish on the clifftop north of town sending its light down to the town",
+                new Vector3(2.6f, 1.7f, 0.6f)));
 
             // ---- Mist lying in the streets ----
             var puff = MakeTexture("Mist Puff", 128, true, (u, v) =>

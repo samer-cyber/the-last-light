@@ -17,7 +17,7 @@ namespace Game
         [SerializeField] Renderer eyeRenderer;
         [SerializeField] AudioSource hum;
         [SerializeField] AudioClip fireClip, chargeClip;
-        [SerializeField] float smell = 38f;
+        [SerializeField] float smell = 30f;
         [SerializeField] float damage = 0.06f;
 
         public override string Title => "a Seeker";
@@ -91,7 +91,7 @@ namespace Game
                 if (diveUntil > Time.time) height = 1.7f;
                 Eye(1f);
                 // One shot at a time from the whole pack: they take turns.
-                if (Time.time > nextShot && Time.time > packShotAt + 0.75f && Vector3.Distance(prey.transform.position, transform.position) < 28f)
+                if (Time.time > nextShot && Time.time > packShotAt + 1.6f && Vector3.Distance(prey.transform.position, transform.position) < 28f)
                 {
                     packShotAt = Time.time;
                     StartCoroutine(Fire(prey));
@@ -105,7 +105,7 @@ namespace Game
             }
             float ground = Ground(target);
             target.y = ground + height;
-            Vector3 wanted = Vector3.ClampMagnitude(target - transform.position, 1f) * 9f;
+            Vector3 wanted = Vector3.ClampMagnitude(target - transform.position, 1f) * 6f;
             velocity = Vector3.Lerp(velocity, wanted, 1f - Mathf.Exp(-2.5f * dt));
             Move(dt, 1f);
             Vector3 look = prey ? prey.transform.position + Vector3.up - transform.position : velocity;
@@ -135,7 +135,7 @@ namespace Game
 
         IEnumerator Fire(HeatSource at)
         {
-            nextShot = Time.time + 2.2f + Random.value * 1.6f;
+            nextShot = Time.time + 3.5f + Random.value * 2f;
             if (sound && chargeClip) sound.PlayOneShot(chargeClip, 0.35f);
             // A breath before it fires: the eye flares.
             for (float t = 0f; t < 0.35f; t += Time.deltaTime)
