@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 namespace Game
@@ -112,6 +113,78 @@ namespace Game
 
         /// <summary>A machine is near: it keeps the survivor between itself and the machine.</summary>
         public Vector3? Cover { get; set; }
+        /// <summary>Its rounds while nothing is asked of it: the pods' panels near the survivor, checked one by one.</summary>
+        public Transform[] Chores { get; set; }
+        /// <summary>Outside the vault: close and low behind the survivor's shoulder, glancing about, now and then hiding.</summary>
+        public bool Timid { get; set; }
+        /// <summary>Ducked behind the survivor just now (outside).</summary>
+        public bool Hiding => Timid && Time.time < hideUntil;
+
+        Transform chore;
+        float choreUntil, restUntil = -1f, scanFrom = -1f, hideUntil, nextHide = 12f;
+        bool scanning;
+
+        /// <summary>Where its rounds take it now, if anywhere: in front of a panel, a little above it.</summary>
+        Vector3? Chore()
+        {
+            float now = Time.time;
+            bool called = Listening || Thinking || GoTo.HasValue || Cover.HasValue || Fallen || Speaking && speakingKind != Kind.Aside;
+            if (Chores == null || Chores.Length == 0 || called)
+            {
+                if (chore) restUntil = now + Random.Range(4f, 8f);
+                EndChore();
+                return null;
+            }
+            Vector3 me = traveller.transform.position;
+            if (chore && (now > choreUntil || Vector3.Distance(chore.position, me) > 9f))
+            {
+                // Another panel next to it, or back to the survivor's shoulder for a while.
+                bool more = Random.value < 0.55f;
+                EndChore();
+                if (!more) restUntil = now + Random.Range(7f, 13f);
+            }
+            if (!chore)
+            {
+                if (now < restUntil) return null;
+                var near = Chores.Where(c => c && Vector3.Distance(c.position, me) < 7.5f).ToArray();
+                if (near.Length == 0) return null;
+                chore = near[Random.Range(0, near.Length)];
+                choreUntil = now + Random.Range(4.5f, 7f);
+                scanFrom = -1f;
+            }
+            Vector3 spot = chore.position + chore.forward * 0.55f + Vector3.up * 0.14f;
+            if (scanFrom < 0f && (transform.position - spot).sqrMagnitude < 0.1f) scanFrom = now;
+            // Once there it scans the panel: a pale beam that sweeps down its screen.
+            float scan = scanFrom < 0f ? -1f : now - scanFrom;
+            if (scan >= 0f && scan < 1.6f)
+            {
+                scanning = true;
+                Beam(chore.position + chore.up * (0.09f - 0.12f * Mathf.PingPong(scan * 1.6f, 1f)), new Color(0.6f, 0.9f, 1f));
+            }
+            else if (scanning)
+            {
+                scanning = false;
+                Beam(null);
+            }
+            return spot;
+        }
+
+        void EndChore()
+        {
+            if (scanning) Beam(null);
+            scanning = false;
+            chore = null;
+            scanFrom = -1f;
+        }
+
+        // Outside it keeps glancing about, at the open snow and the sky, as if something might come.
+        Vector3 Glance()
+        {
+            Vector3 forward = travellerBody ? Flat(travellerBody.forward).normalized : Vector3.forward;
+            float t = Time.time;
+            float turn = 55f * Mathf.Sin(t * 0.55f) + 25f * Mathf.Sin(t * 1.7f + 1.3f);
+            return traveller.transform.position + Quaternion.Euler(0f, turn, 0f) * forward * 8f + Vector3.up * (1.5f + 1.4f * Mathf.Max(0f, Mathf.Sin(t * 0.37f)));
+        }
 
         Vector3 Home()
         {
@@ -122,6 +195,17 @@ namespace Game
                 return traveller.transform.position + away * 0.75f + Vector3.Cross(Vector3.up, away) * 0.35f + Vector3.up * 1.45f;
             }
             var facing = travellerBody ? Quaternion.Euler(0f, travellerBody.eulerAngles.y, 0f) : Quaternion.identity;
+            if (Timid)
+            {
+                // Close behind the shoulder, low; now and then it ducks behind their head for a moment.
+                if (Time.time > nextHide)
+                {
+                    hideUntil = Time.time + Random.Range(1.8f, 3.2f);
+                    nextHide = hideUntil + Random.Range(8f, 16f);
+                }
+                var tucked = Hiding ? new Vector3(0.22f, 1.5f, -0.45f) : new Vector3(0.45f, 1.55f, -0.38f);
+                return traveller.transform.position + facing * tucked;
+            }
             return traveller.transform.position + facing * offset;
         }
 
@@ -143,8 +227,10 @@ namespace Game
                 return;
             }
             Vector3 camera = follow.View.transform.position;
-            bool facing = Listening || Speaking && !GoTo.HasValue;
-            Vector3 target = GoTo ?? (facing ? Before() : Home());
+            // It turns to the survivor when they talk to it and when it answers; its asides it says over its work.
+            bool facing = Listening || Speaking && !GoTo.HasValue && !(chore && speakingKind == Kind.Aside);
+            Vector3? job = facing ? null : Chore();
+            Vector3 target = GoTo ?? (facing ? Before() : job ?? Home());
             float t = Time.time;
             string feeling = Mood;
             float lively = feeling is "HAPPY" or "PLAYFUL" ? (Speaking ? 1f : 0.5f) : 0f;
@@ -170,7 +256,8 @@ namespace Game
             // Where the eye looks: at the survivor's face while talking, at what it was sent to, else where they look.
             // Talking with them, it looks at the survivor's face (not at the camera behind them).
             Vector3 face = traveller.transform.position + Vector3.up * 1.62f;
-            Vector3 look = facing ? face : LookAt ?? traveller.AimPoint ?? transform.position + (travellerBody ? travellerBody.forward : Vector3.forward) * 6f;
+            Vector3 look = facing ? face : LookAt ?? (job.HasValue ? chore.position : Timid && !Speaking ? Glance()
+                : traveller.AimPoint ?? transform.position + (travellerBody ? travellerBody.forward : Vector3.forward) * 6f);
             Vector3 to = look - transform.position;
             var aim = to.sqrMagnitude > 0.01f ? Quaternion.LookRotation(to, Vector3.up) : shell.rotation;
             // It leans into its flight a little.
@@ -198,7 +285,7 @@ namespace Game
             };
             if (Colour != warm) wantColour = Colour;
             moodColour = Color.Lerp(moodColour, wantColour, 1f - Mathf.Exp(-3f * dt));
-            float wanted = Listening ? 1.25f + Level * 0.35f : Thinking ? 0.7f : Mood == "SCARED" || Cover.HasValue ? 0.6f : Mood == "ANGRY" ? 0.75f : 1f;
+            float wanted = Listening ? 1.25f + Level * 0.35f : Thinking ? 0.7f : Mood == "SCARED" || Cover.HasValue || Hiding ? 0.6f : Mood == "ANGRY" ? 0.75f : 1f;
             open = Mathf.Lerp(open, wanted, 1f - Mathf.Exp(-8f * dt));
             if (iris)
             {

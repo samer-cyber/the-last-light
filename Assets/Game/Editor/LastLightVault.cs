@@ -385,32 +385,40 @@ namespace Game.Building
             var chamberModel = Art.Sketchfab("PodChamber");
             var chamberMaterials = chamberModel.GetComponentsInChildren<Renderer>(true).SelectMany(r => r.sharedMaterials).Where(m => m).Distinct().ToList();
             var chamberGlow = chamberMaterials.First(m => m.name == "M_glow");
-            var chamberGlass = Art.Variant(chamberMaterials.First(m => m.name == "M_glass"), "Chamber Glass Frosted", v =>
+            // The glass itself frosted from the inside, all the way round its curve (Game/Frost).
+            var chamberGlass = MakeMaterial("Pod Frost Glass", "Game/Frost", m =>
             {
-                v.SetColor("baseColorFactor", new Color(0.8f, 0.87f, 0.93f, 0.86f));
-                v.SetFloat("roughnessFactor", 0.88f);
+                m.SetColor("_Color", new Color(0.74f, 0.83f, 0.92f, 1f));
+                m.SetFloat("_Density", 0.8f);
+                m.SetFloat("_Floor", 0f);
+                m.SetFloat("_Face", 1.62f);
+                m.SetFloat("_Glow", 0.14f);
             });
             Material GlowOf(Material state) => Art.Variant(chamberGlow, "Chamber Glow " + state.name.Replace("Pod Light ", ""), v =>
                 v.SetColor("emissiveFactor", state.GetColor("_EmissionColor")));
             var sleepPose = AssetDatabase.LoadAllAssetsAtPath(AssetDatabase.GetAssetPath(chamberModel)).OfType<AnimationClip>().FirstOrDefault();
             PodLights failing = null;
             Bounds bodyBox = default, glassBox = default;
-            // Frost over the glass of an occupied pod: thick and crystalline, thickest at the bottom and the edges, a
-            // little thinner where a face would be, so a sleeper is only a dim shape behind it.
-            var frostPattern = MakeTexture("Pod Frost", 256, true, (u, v) =>
+            // Every pod's own little panel on the pier beside it: a steel box, a screen with its sleeper's state, a lamp.
+            var screens = new Dictionary<string, Material>();
+            foreach (var state in new[] { "Stable", "Failing", "Critical", "Open", "Dark", "Awake" })
             {
-                float grain = Mathf.PerlinNoise(u * 14f, v * 14f) * 0.55f + Mathf.PerlinNoise(u * 46f, v * 46f) * 0.3f + Mathf.PerlinNoise(u * 120f, v * 120f) * 0.15f;
-                float edge = Mathf.Clamp01(Mathf.Abs(u - 0.5f) * 2.4f - 0.55f) + Mathf.Clamp01(0.32f - v) * 1.6f;
-                float face = Mathf.Clamp01(1f - new Vector2((u - 0.5f) * 2.6f, (v - 0.8f) * 4f).magnitude);
-                float a = Mathf.Clamp01(0.7f + grain * 0.28f + edge * 0.3f - face * 0.16f);
-                return new Color(0.86f, 0.92f, 1f, a);
-            });
-            var podFrost = MakeMaterial("Pod Frost", "Universal Render Pipeline/Unlit", m =>
+                var picture = Load<Texture2D>($"{Root}/Textures/Clues/Pod Screen {state}.png");
+                screens[state] = MakeMaterial("Pod Screen " + state, "Universal Render Pipeline/Unlit", m =>
+                {
+                    m.SetTexture("_BaseMap", picture);
+                    m.SetColor("_BaseColor", Color.white * (state == "Dark" ? 1f : 1.4f));
+                });
+            }
+            Renderer PodPanel(Transform pod, string state, Material lampLook, Vector3 at)
             {
-                m.SetTexture("_BaseMap", frostPattern);
-                m.SetColor("_BaseColor", new Color(0.36f, 0.42f, 0.5f, 1f));
-            });
-            Transparent(podFrost);
+                var housing = Art.Slab("Pod Panel", pod, steel, at, new Vector3(0.24f, 0.32f, 0.08f));
+                var face = Box("Pod Panel Screen", housing.transform, screens[state], new Vector3(0f, -0.03f, 0.041f), new Vector3(0.2f, 0.125f, 0.004f), false);
+                face.shadowCastingMode = ShadowCastingMode.Off;
+                var lamp = Art.Slab("Pod Panel Lamp", housing.transform, lampLook, new Vector3(0.075f, 0.11f, 0.044f), new Vector3(0.03f, 0.03f, 0.012f), false);
+                lamp.shadowCastingMode = ShadowCastingMode.Off;
+                return housing;
+            }
             Transform Pod(int number, float side, float z)
             {
                 var pod = new GameObject($"Pod {number}").transform;
@@ -442,10 +450,6 @@ namespace Game.Building
                 if (!empty)
                 {
                     PutSleeper(pod, bodyBox, number);
-                    var rime = Box("Pod Frost", pod, podFrost, new Vector3(glassBox.center.x, glassBox.center.y, glassBox.max.z - 0.035f),
-                        new Vector3(glassBox.size.x * 0.86f, glassBox.size.y * 0.92f, 0.004f), false);
-                    rime.shadowCastingMode = ShadowCastingMode.Off;
-                    rime.receiveShadows = false;
                 }
                 var glow = GlowOf(status);
                 foreach (var r in chamber.GetComponentsInChildren<Renderer>(true))
@@ -475,6 +479,8 @@ namespace Game.Building
                     inside.intensity = 0.9f;
                     inside.shadows = LightShadows.None;
                 }
+                string shows = empty ? "Open" : status == amber ? "Failing" : status == red ? "Critical" : status == dead ? "Dark" : "Stable";
+                PodPanel(pod, shows, status, new Vector3(PodPitch * 0.5f - 0.05f, 1.25f, 0.46f));
                 // Mr. Okafor's pod fails while the survivor watches (the director calls it).
                 if (number == 9)
                 {
@@ -484,7 +490,8 @@ namespace Game.Building
                     voice.spatialBlend = 0.85f;
                     voice.minDistance = 2f;
                     voice.maxDistance = 25f;
-                    Wire(failing, ("from", glow), ("to", GlowOf(red)), ("inside", inside), ("voice", voice), ("failClip", FindClip("pod_fail")));
+                    Wire(failing, ("from", glow), ("to", GlowOf(red)), ("inside", inside), ("voice", voice), ("failClip", FindClip("pod_fail")),
+                        ("screenFrom", screens["Failing"]), ("screenTo", screens["Critical"]), ("lampFrom", amber), ("lampTo", red));
                 }
                 var body = pod.gameObject.AddComponent<BoxCollider>();
                 body.center = new Vector3(0f, 1.48f, -0.02f);
@@ -585,16 +592,16 @@ namespace Game.Building
             podLamp.intensity = 1.1f;
             podLamp.shadows = LightShadows.Soft;
             Clue("Pod 40 Label", mine, "Pod 40 Label", new Vector3(0f, glassBox.max.y + 0.1f, glassBox.max.z + 0.03f), new Vector2(0.62f, 0.12f), Quaternion.identity);
-            // Its own panel: a steel console on the pier beside it, toward the door, the instrument set into its top.
-            var console = Art.Slab("Pod Console", mine, steel, new Vector3(PodPitch * 0.5f, 0.55f, 0.72f), new Vector3(0.42f, 1.1f, 0.32f));
-            Art.Prop("vintage_spacecraft_instrument", console.transform, new Vector3(0f, 0.55f, 0.02f), Quaternion.Euler(-25f, -15f, 0f));
-            // It shrieks when the survivor wakes, a red lamp blinking on it, until they touch it.
+            // Its own panel on the pier beside it, toward the door, the same as everyone's. It shrieks when the survivor
+            // wakes, its lamp blinking red, until they touch it; then it says they are awake.
+            var console = PodPanel(mine, "Critical", red, new Vector3(PodPitch * 0.5f - 0.05f, 1.25f, 0.46f));
+            console.name = "Pod Console";
             var panel = console.gameObject.AddComponent<Touchable>();
             SetValue(panel, "title", "your pod's panel");
             SetValue(panel, "verb", "touch the panel");
             parts.Panel = panel;
             var panelAlarm = MakeSource("Panel Alarm", console.transform, FindClip("pod_alarm_soft"), true);
-            panelAlarm.transform.localPosition = new Vector3(0f, 0.6f, 0.1f);
+            panelAlarm.transform.localPosition = new Vector3(0f, 0f, 0.1f);
             panelAlarm.spatialBlend = 0.8f;
             panelAlarm.minDistance = 2.5f;
             panelAlarm.maxDistance = 30f;
@@ -602,12 +609,15 @@ namespace Game.Building
             parts.Alarm = panelAlarm;
             var alarmLamp = new GameObject("Panel Lamp").AddComponent<Light>();
             alarmLamp.transform.SetParent(console.transform, false);
-            alarmLamp.transform.localPosition = new Vector3(0f, 0.75f, 0.25f);
+            alarmLamp.transform.localPosition = new Vector3(0.075f, 0.11f, 0.22f);
             alarmLamp.type = LightType.Point;
             alarmLamp.color = new Color(1f, 0.2f, 0.12f);
-            alarmLamp.range = 1.4f;
+            alarmLamp.range = 1.3f;
             alarmLamp.intensity = 0f;
             alarmLamp.shadows = LightShadows.None;
+            var screen = console.gameObject.AddComponent<PanelScreen>();
+            Wire(screen, ("screen", console.transform.Find("Pod Panel Screen").GetComponent<Renderer>()),
+                ("lamp", console.transform.Find("Pod Panel Lamp").GetComponent<Renderer>()), ("lampLight", alarmLamp), ("quiet", screens["Awake"]));
             landmarks.Add(MakeLandmark("Your Pod Place", mine, mine.position + Vector3.up * 1.3f, "YOUR_POD", "your pod",
                 "pod 40, the pod the survivor woke in, the last on the east side. It cracked in the cold, so you woke them by protocol 5. Its label is frosted over: only the number 40 and the letters R. ARCH can be read; the rest is under the frost",
                 new Vector3(1.2f, 2.6f, 1.2f)));

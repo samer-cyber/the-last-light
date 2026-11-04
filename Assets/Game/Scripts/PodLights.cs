@@ -13,6 +13,7 @@ namespace Game
         [SerializeField] Light inside;
         [SerializeField] AudioSource voice;
         [SerializeField] AudioClip failClip;
+        [SerializeField, Tooltip("Its panel's screen and lamp, failing with it.")] Material screenFrom, screenTo, lampFrom, lampTo;
 
         public bool Failed { get; private set; }
 
@@ -30,6 +31,8 @@ namespace Game
             {
                 bool red = i % 2 == 0;
                 Swap(renderers, red ? from : to, red ? to : from);
+                Swap(renderers, red ? screenFrom : screenTo, red ? screenTo : screenFrom);
+                Swap(renderers, red ? lampFrom : lampTo, red ? lampTo : lampFrom);
                 if (inside)
                 {
                     // Each time it fails toward red it flares, as if trying, then gives.

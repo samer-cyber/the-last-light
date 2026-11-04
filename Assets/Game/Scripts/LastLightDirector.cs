@@ -296,6 +296,7 @@ namespace Game
             traveller.Read += page => { readTitle = page.Title; readAt = Time.time; };
             body.Stepped += (foot, pace) => Step(Footstep(), 0.15f + 0.08f * pace);
             roofs = FindObjectsByType<Indoors>(FindObjectsSortMode.None);
+            panels = FindObjectsByType<Transform>(FindObjectsSortMode.None).Where(x => x.name == "Pod Panel").ToArray();
             if (gate) gate.Moved += open => { if (open) Beat("door", Line("The door's open!", "HAPPY")); };
             if (doorIce) doorIce.Freed += _ => Beat("vault door", DoorGives, OpenVault);
             if (heartCase) heartCase.Freed += _ => Beat("heart free", Line("It's free. It's heavy, so you'll have to carry it. Pick it up with E.", "HAPPY"), () => Hint("[E] pick up the heart", 8f));
@@ -329,6 +330,9 @@ namespace Game
             drone.Quiet = talking || handling || cutLine != null;
             drone.Level = talk.Level;
             traveller.Attending = drone.Listening || drone.Speaking ? drone.transform.position : (Vector3?)null;
+            Vector3 at = traveller.transform.position;
+            drone.Chores = open && rambleFrom >= 0f && !doorOpen && !handling && InHall(at) ? panels : null;
+            drone.Timid = open && doorOpen && vaultDoor && at.z > vaultDoor.position.z + 1.6f && !ended;
             var keys = Keyboard.current;
             if (keys == null) return;
             if (ended && keys.rKey.wasPressedThisFrame) SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
@@ -606,7 +610,7 @@ namespace Game
         IEnumerator Panel()
         {
             if (!podPanel) yield break;
-            Vector3 panelAt = podPanel.transform.position + Vector3.up * 0.6f;
+            Vector3 panelAt = podPanel.transform.position;
             // Spark goes to hover beside the panel, away from the pod; the view turns round to it.
             Vector3 aside = Flat(podPanel.transform.position - (podLid ? podLid.parent.position : traveller.transform.position));
             aside = aside.sqrMagnitude > 0.01f ? aside.normalized : Vector3.right;
@@ -651,32 +655,17 @@ namespace Game
             bond.Event("flash_1", 2, "When the survivor touched their pod's shrieking panel, their hands knew exactly what to press, without thinking, and it went quiet. Then they went still for a moment, as if listening to something you could not hear", 6, Time.time);
         }
 
-        Coroutine alarming;
-
         void StartAlarm()
         {
             if (!podAlarm || podAlarm.isPlaying) return;
             podAlarm.Play();
-            var lamp = podPanel ? podPanel.GetComponentInChildren<Light>() : null;
-            if (lamp) alarming = StartCoroutine(Blink(lamp));
+            if (podPanel && podPanel.TryGetComponent(out PanelScreen screen)) screen.Alarm(true);
         }
 
         void StopAlarm()
         {
             if (podAlarm) podAlarm.Stop();
-            if (alarming != null) StopCoroutine(alarming);
-            alarming = null;
-            var lamp = podPanel ? podPanel.GetComponentInChildren<Light>() : null;
-            if (lamp) lamp.intensity = 0f;
-        }
-
-        static IEnumerator Blink(Light lamp)
-        {
-            while (lamp)
-            {
-                lamp.intensity = Mathf.Repeat(Time.time * 2f, 1f) < 0.5f ? 1.2f : 0.05f;
-                yield return null;
-            }
+            if (podPanel && podPanel.TryGetComponent(out PanelScreen screen)) screen.Alarm(false);
         }
 
         /// <summary>
@@ -881,6 +870,7 @@ namespace Game
         };
         int rambled;
         float rambleFrom = -1f;
+        Transform[] panels;
 
         IEnumerator Ramble()
         {
@@ -1459,7 +1449,7 @@ namespace Game
                 if (doorIce && !doorIce.Free && breached.Contains("DOOR") && doorHintAt > 0f && Time.time - doorHintAt > 90f && Time.time - quietSince > 40f && !Busy)
                     Beat("door nudge", Line("Ice doesn't like heat. I'm only saying.", "CURIOUS"));
                 // In the hall, Spark rambles: after a little quiet it talks on its own, about something new each time.
-                if (rambleFrom > 0f && rambled < 5 && InHall(p) && !handling && !Busy && !drone.Busy && !talk.Listening && !say.IsOpen
+                if (rambleFrom >= 0f && rambled < 5 && InHall(p) && !handling && !Busy && !drone.Busy && !talk.Listening && !say.IsOpen
                     && Time.time - quietSince > 26f + rambled * 14f && Time.time - rambleFrom > 20f)
                 {
                     quietSince = Time.time;
