@@ -408,6 +408,20 @@ namespace Game
         /// <summary>Asks as if the player had written it (tests use this).</summary>
         public void Ask(string words) => waiting.Enqueue((words, false));
 
+        /// <summary>Whether the story has ended (the menu does not pause over the ending).</summary>
+        public bool Ended => ended;
+
+        /// <summary>From the menu: back at the last checkpoint (1 awake in the vault, 2 outside it), name and trust kept.</summary>
+        public void Continue(int checkpoint, string name, int trust)
+        {
+            if (checkpoint >= 2) Skip();
+            else SkipInside();
+            if (!string.IsNullOrWhiteSpace(name)) survivorName = name;
+            bond.Set(trust);
+            string welcome = survivorName.Length > 0 ? $"You're back, {survivorName}. I kept the lights on." : "You're back. I kept the lights on.";
+            Beat("continue", Line(welcome, "HAPPY"));
+        }
+
         /// <summary>Skips the opening: the world at once, the goal shown (tests).</summary>
         public void Skip()
         {
@@ -1486,6 +1500,8 @@ namespace Game
                 }
                 if (doorOpen && vaultDoor && p.z > vaultDoor.position.z + 3f && !told.Contains("outside") && breached.Contains("LEAVE"))
                 {
+                    // A checkpoint: out of the vault together.
+                    Settings.Save(2, survivorName, bond.Trust);
                     Beat("outside", Line("That's the sun. What's left of it. The great minds put it in a cage.", "SAD"),
                         Line("See that glint on the cliff, far off? That's the sun mirror. It could warm the vault and wake them. But a Harvester took its heart.", "WORRIED"));
                     ShowGoal();
@@ -1964,7 +1980,12 @@ namespace Game
                 droneName = turn.DroneName.Trim().TrimEnd('.', '!');
                 say.Placeholder = "say something to " + droneName;
             }
-            if (!string.IsNullOrWhiteSpace(turn.SurvivorName)) survivorName = turn.SurvivorName.Trim().TrimEnd('.', '!');
+            if (!string.IsNullOrWhiteSpace(turn.SurvivorName))
+            {
+                survivorName = turn.SurvivorName.Trim().TrimEnd('.', '!');
+                // A checkpoint: awake, named, in the vault.
+                Settings.Save(1, survivorName, bond.Trust);
+            }
             if (!string.IsNullOrWhiteSpace(turn.Remember) && !remembered.Contains(turn.Remember))
             {
                 remembered.Add(turn.Remember);

@@ -30,7 +30,7 @@ namespace Game
             bool fire = Heat.Near(transform.position, 4.5f);
             float back = Time.time - hurtAt > 4f ? 0.04f : 0f;
             if (fire) back += 0.12f;
-            Value = Mathf.MoveTowards(Value, 1f, back * Time.deltaTime);
+            Value = Mathf.MoveTowards(Value, 1f, back / Settings.Harm * Time.deltaTime);
             hud.Warmth(Value);
         }
 
@@ -45,7 +45,7 @@ namespace Game
                 if (sound && blockClip) sound.PlayOneShot(blockClip, 0.7f);
                 return;
             }
-            Value = Mathf.Max(0f, Value - amount);
+            Value = Mathf.Max(0f, Value - amount * Settings.Harm);
             hurtAt = Time.time;
             follow.Shake = Mathf.Max(follow.Shake, 0.12f);
             hud.Flash(0.35f);

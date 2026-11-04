@@ -100,7 +100,7 @@ namespace Game
                 if (keys != null && keys.escapeKey.wasPressedThisFrame && !Typing) Lock(false);
                 if (locked && settle <= 0f)
                 {
-                    Vector2 delta = Vector2.ClampMagnitude(mouse.delta.ReadValue(), 400f) * lookSpeed;
+                    Vector2 delta = Vector2.ClampMagnitude(mouse.delta.ReadValue(), 400f) * lookSpeed * Settings.Mouse;
                     targetYaw += delta.x;
                     targetPitch = Mathf.Clamp(targetPitch - delta.y, pitchRange.x, pitchRange.y);
                 }
