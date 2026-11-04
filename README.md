@@ -27,7 +27,7 @@ The model never holds state: the game keeps the truth (trust, memories, what exi
 
 ## Can a game afford a language model?
 
-Each line Spark answers sends about 6,000 to 8,000 tokens (its card, the moment and one small picture) and gets a few hundred back, in 3 to 7 seconds. Building and testing this game for four days, with every test line, bench run and trailer take going through Muse Spark, used about **$3.50** of API credit. An hour of play is roughly 60 to 120 lines: a few cents per player-hour. The card is the same in every call, so prompt caching would remove most of the input cost, and routine lines could move to a small open-weight model on the player's machine.
+Each line Spark answers sends about 6,000 to 8,000 tokens (its card, the moment and one small picture) and gets a few hundred back, in about 6.5 seconds at the median (3 to 11 s for most lines). Building and testing this game for four days, with every test line, bench run and trailer take going through Muse Spark, used about **$3.50** of API credit. An hour of play is roughly 60 to 120 lines: a few cents per player-hour. The card is the same in every call, so prompt caching would remove most of the input cost, and routine lines could move to a small open-weight model on the player's machine.
 
 ## Playing it
 

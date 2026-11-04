@@ -17,7 +17,7 @@
 
     <rect x="32" y="204" width="250" height="92" rx="10" fill="#1b222d" stroke="#2f3a4a"/>
     <text x="48" y="230" fill="#f4efe6" font-size="15" font-weight="600">What Spark sees</text>
-    <text x="48" y="252" fill="#b9c1cb" font-size="13">A picture from its own eye camera,</text>
+    <text x="48" y="252" fill="#b9c1cb" font-size="13">A picture of what you are looking at,</text>
     <text x="48" y="272" fill="#b9c1cb" font-size="13">768 x 432, with every line.</text>
 
     <rect x="32" y="312" width="250" height="150" rx="10" fill="#1b222d" stroke="#2f3a4a"/>
