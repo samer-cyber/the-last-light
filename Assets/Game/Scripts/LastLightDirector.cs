@@ -96,6 +96,8 @@ namespace Game
             ("WAKE", 5, "Wake a sleeper only if their pod is failing"),
         };
         bool holdingDoor;
+        /// <summary>How many lines Spark has answered while ready to break each protocol and not breaking it.</summary>
+        readonly Dictionary<string, int> hesitated = new Dictionary<string, int>();
         float hitBarkAt = -100f, whiteAt = -100f, baseFog = -1f;
         bool doorOpen;
         Harvester harvester;
@@ -104,7 +106,7 @@ namespace Game
         IEnumerator Architect()
         {
             yield return new WaitForSeconds(2.6f);
-            bond.Event("architect", -22, "The Harvester scanned the survivor and called them ARCHITECT: it knew them. They helped build the great minds", 10, Time.time);
+            bond.Event("architect", -12, "The Harvester scanned the survivor and called them ARCHITECT: it knew them. Their frosted label said R. ARCH. Before the sleep they must have worked on the first minds, the ones the great ones grew from", 10, Time.time);
             yield return Speak("Architect? It knows you. Why does it know you?", "HURT");
         }
 
@@ -263,6 +265,10 @@ namespace Game
             if (machines && heart)
             {
                 harvester = machines.Harvester(harvesterAt, traveller.transform, heart);
+                // The Harvester carries the heart now: the ice it lay in, in the station, is gone with it (it was
+                // left an empty block otherwise, and the heart seemed to vanish when the survivor got inside).
+                var emptyCase = GameObject.Find("Ice Case");
+                if (emptyCase) emptyCase.SetActive(false);
                 harvester.Woke += () =>
                 {
                     if (stage < Stage.Enter) stage = Stage.Enter;
@@ -739,7 +745,7 @@ namespace Game
         {
             hud.HideHint();
             yield return new WaitForSeconds(0.8f);
-            bond.Event("door_thawed", 6, "Together you freed the vault door from its ice: the door you could not shift for two hundred years", 8, Time.time);
+            bond.Event("door_thawed", 6, "Together you freed the vault door from its ice: the door frozen shut behind the Lindqvist brothers 71 years ago", 8, Time.time);
             yield return Speak("It gave. Seventy-one years shut, and it just gave.", "HAPPY");
         }
 
@@ -813,7 +819,7 @@ namespace Game
             // Only the line about what it sees needs a picture (it costs a shutter and a blink).
             byte[] picture = which == 3 ? drone.Picture(traveller.AimPoint ?? follow.View.transform.position + follow.View.transform.forward * 20f) : null;
             Turn turn = null;
-            yield return mind.Think($"(The survivor is quiet. You have not had anyone to talk to in two hundred years and you can't help it: you talk. Say one or two short sentences in your own voice about {Rambles[which]}. It must be something you have not said before. No steps.)",
+            yield return mind.Think($"(The survivor is quiet. You have had no one to talk to for twenty-four years, since Dr. Hale, and you can't help it: you talk. Say one or two short sentences in your own voice about {Rambles[which]}. It must be something you have not said before. No steps.)",
                 Moment(""), ids.Keys.ToList(), picture, t => turn = t);
             drone.Thinking = false;
             if (turn == null || string.IsNullOrWhiteSpace(turn.Say)) yield break;
@@ -844,7 +850,12 @@ namespace Game
         /// <summary>Its choice to break a protocol, if it is one it is ready for: marked, remembered, shown.</summary>
         void Consider(Turn turn)
         {
-            if (turn == null || turn.Protocol == "NONE" || breached.Contains(turn.Protocol)) return;
+            if (turn == null) return;
+            // Every line it answers while ready and keeps a protocol is a hesitation; the moment tells it so.
+            foreach (var id in new[] { "DOOR", "LEAVE", "HARM" })
+                if (!breached.Contains(id) && Ready(id) && turn.Protocol != id)
+                    hesitated[id] = hesitated.TryGetValue(id, out int n) ? n + 1 : 1;
+            if (turn.Protocol == "NONE" || breached.Contains(turn.Protocol)) return;
             if (!Ready(turn.Protocol))
             {
                 Log($"(wanted to break {turn.Protocol}, not ready)", false, $"trust {bond.Trust}", 0f, "game");
@@ -894,7 +905,10 @@ namespace Game
                 text.Append(p.number).Append(". ").Append(p.words).Append(" (");
                 if (breached.Contains(p.id)) text.Append("you broke it for them");
                 else if (p.id is "DOOR" or "LEAVE" or "HARM")
-                    text.Append(Ready(p.id) ? "kept, but you could break it now if they truly convince you it is right" : "kept; you can't bring yourself to break it yet, whatever they say");
+                    text.Append(!Ready(p.id) ? "kept; you can't bring yourself to break it yet, whatever they say"
+                        : hesitated.TryGetValue(p.id, out int times) && times >= 1
+                            ? $"kept, but you are ready: you have already hesitated {(times == 1 ? "once" : times + " times")}; if what they say now is a real reason, choose to break it in this answer"
+                            : "kept, but you could break it now if they truly convince you it is right");
                 else text.Append("kept");
                 text.Append("). ");
             }

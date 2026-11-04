@@ -34,7 +34,7 @@ namespace Game.Building
             // Bones by their plain names ("mixamorig:LeftForeArm_010" is LeftForeArm).
             var bones = made.GetComponentsInChildren<Transform>(true);
             Transform Bone(string name) => FindBone(bones, name);
-            if (modelName == "CryoMan") Suit(made, new Color(0.30f, 0.34f, 0.40f), "Survivor");
+            if (modelName == "CryoMan") Suit(made, new Color(0.36f, 0.42f, 0.5f), "Survivor");
             // From the toes' joints to the head's joint is the height less about 4 cm under the toes and 20 cm of skull
             // (the "_End" leaf bones can't be used: re-exported, they all sit at one point).
             float Toes() => Mathf.Min(Bone("LeftToeBase").position.y, Bone("RightToeBase").position.y);

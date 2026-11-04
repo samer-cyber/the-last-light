@@ -23,6 +23,7 @@ namespace Game
         RenderTexture world, overlay;
         PanelSettings[] panels;
         (bool, Color)[] clears;
+        AudioSource[] music = new AudioSource[0];
         Texture2D worldFrame, overlayFrame;
         Color32[] mixed;
         FileStream sound;
@@ -59,6 +60,8 @@ namespace Game
             f.channels = AudioSettings.speakerMode == AudioSpeakerMode.Mono ? 1 : 2;
             f.sound = new FileStream(Path.Combine(folder, "sound.wav"), FileMode.Create, FileAccess.Write);
             f.sound.Write(new byte[44], 0, 44);
+            f.music = FindObjectsByType<AudioSource>(FindObjectsSortMode.None).Where(a => a.name == "Music" || a.name == "Finale Music").ToArray();
+            foreach (var a in f.music) a.mute = true;
             Time.captureFramerate = fps;
             AudioRenderer.Start();
             Current = f;
@@ -118,6 +121,7 @@ namespace Game
             Current = null;
             AudioRenderer.Stop();
             Time.captureFramerate = 0;
+            foreach (var a in music) if (a) a.mute = false;
             if (view) view.targetTexture = null;
             for (int i = 0; i < panels.Length; i++)
                 if (panels[i])

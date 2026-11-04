@@ -4,7 +4,7 @@ namespace Game
 {
     /// <summary>
     /// A moving camera for filming: it glides from one place to another (or round a point), looking from one point
-    /// to another, eased, over a number of game seconds, then holds there until the shot ends or another begins.
+    /// to another, eased, over a number of game seconds, then holds there (the follow camera keeps the shot) until another shot begins.
     /// </summary>
     public class Dolly : MonoBehaviour
     {
@@ -49,6 +49,12 @@ namespace Game
         {
             t += Time.deltaTime;
             Place(Mathf.Clamp01(t / seconds));
+            // Done: the camera holds where it ended (the follow camera keeps the shot) and the next shot can take over.
+            if (t >= seconds)
+            {
+                if (current == this) current = null;
+                Destroy(gameObject);
+            }
         }
 
         void Place(float k)

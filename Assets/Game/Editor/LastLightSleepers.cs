@@ -59,8 +59,8 @@ namespace Game.Building
                             v.SetTexture("baseColorTexture", fabric);
                             v.SetTexture("normalTexture", null);
                             v.SetTexture("metallicRoughnessTexture", null);
-                            v.SetFloat("metallicFactor", 0.08f);
-                            v.SetFloat("roughnessFactor", 0.62f);
+                            v.SetFloat("metallicFactor", 0f);
+                            v.SetFloat("roughnessFactor", 0.9f);
                         });
                         changed = true;
                     }
@@ -72,11 +72,13 @@ namespace Game.Building
         /// <summary>Padded thermal cloth: a fine weave, quilted in soft ridges, a little uneven.</summary>
         static Color SuitCloth(float u, float v)
         {
-            float weave = 0.5f + 0.5f * Mathf.Sin(u * 512f * 1.2f) * Mathf.Sin(v * 512f * 1.2f);
-            float quilt = Mathf.Pow(Mathf.Abs(Mathf.Sin(v * Mathf.PI * 22f)), 0.35f);
-            float blotch = Mathf.PerlinNoise(u * 9f, v * 9f);
-            float k = 0.78f + 0.1f * weave + 0.12f * quilt - 0.08f * blotch;
-            return new Color(k, k, k, 1f);
+            // A fine knit, quilted in ridges with dark stitched grooves between them, a little worn.
+            float knit = 0.5f + 0.5f * Mathf.Sin(u * 512f * 2.1f) * Mathf.Sin(v * 512f * 2.1f + Mathf.Sin(u * 512f * 1.05f));
+            float ridge = Mathf.Abs(Mathf.Sin(v * Mathf.PI * 30f));
+            float groove = Mathf.SmoothStep(0f, 0.18f, ridge);
+            float blotch = Mathf.PerlinNoise(u * 7f, v * 7f);
+            float k = (0.62f + 0.16f * knit + 0.22f * Mathf.Sqrt(ridge)) * (0.55f + 0.45f * groove) - 0.07f * blotch;
+            return new Color(k, k, k * 1.02f, 1f);
         }
 
         static GameObject sleeperPrefab;
@@ -97,7 +99,7 @@ namespace Game.Building
             made.transform.position = Vector3.zero;
             foreach (var a in made.GetComponentsInChildren<Animation>(true)) Object.DestroyImmediate(a);
             foreach (var a in made.GetComponentsInChildren<Animator>(true)) Object.DestroyImmediate(a);
-            Suit(made, new Color(0.32f, 0.36f, 0.42f), "Sleeper");
+            Suit(made, new Color(0.33f, 0.39f, 0.47f), "Sleeper");
             var bones = made.GetComponentsInChildren<Transform>(true);
             Transform B(string n) => FindBone(bones, n);
             Vector3 forward = B("LeftToeBase").position - B("LeftFoot").position;

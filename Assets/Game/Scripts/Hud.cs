@@ -19,6 +19,21 @@ namespace Game
         Label title, card, listenWords, said, note, aimWords, aimAction, carry, voiceName, voiceWords, photoCaption, goalTitle, goalStep;
         Label honourTitle, honourLine, trustWords, health;
         IVisualElementScheduledItem saidFade, noteFade, voiceFade, photoFade, honourFade, hurtFade;
+        readonly System.Collections.Generic.Dictionary<string, (float at, System.Action act)> later = new System.Collections.Generic.Dictionary<string, (float, System.Action)>();
+
+        /// <summary>Runs something after some game seconds; a newer one under the same key replaces it.</summary>
+        void Later(string key, float seconds, System.Action act) => later[key] = (Time.time + seconds, act);
+
+        void Update()
+        {
+            if (later.Count == 0) return;
+            foreach (var key in new System.Collections.Generic.List<string>(later.Keys))
+            {
+                if (!later.TryGetValue(key, out var item) || Time.time < item.at) continue;
+                later.Remove(key);
+                item.act();
+            }
+        }
         VisualElement hurt;
         Texture2D lines;
 
@@ -147,7 +162,9 @@ namespace Game
         {
             Build();
             voiceFade?.Pause();
+            later.Remove("voice");
             voiceName.text = (name ?? "").ToUpperInvariant();
+            voice.EnableInClassList("hud__voice--memory", name == "YOU, LONG AGO");
             int letters = Mathf.Clamp(Mathf.CeilToInt(line.Length * shown), 0, line.Length);
             // The rest is laid out but clear, so the line does not jump as it is typed.
             voiceWords.text = line.Substring(0, letters) + "<alpha=#00>" + line.Substring(letters);
@@ -158,7 +175,7 @@ namespace Game
         {
             Build();
             voiceFade?.Pause();
-            voiceFade = voice.schedule.Execute(() => voice.RemoveFromClassList("hud__voice--shown")).StartingIn((long)(seconds * 1000f));
+            Later("voice", seconds, () => voice.RemoveFromClassList("hud__voice--shown"));
         }
 
         /// <summary>A picture the drone's eye took, framed in the corner, with a few words under it.</summary>
@@ -176,7 +193,7 @@ namespace Game
                 photo.AddToClassList("hud__photo--shown");
             }).StartingIn(120);
             photoFade?.Pause();
-            photoFade = photo.schedule.Execute(() => photo.RemoveFromClassList("hud__photo--shown")).StartingIn((long)(seconds * 1000f));
+            Later("photo", seconds, () => photo.RemoveFromClassList("hud__photo--shown"));
         }
 
         /// <summary>What the survivor is doing: the goal, and the step now. Empty hides it.</summary>
@@ -207,7 +224,7 @@ namespace Game
             honourLine.text = line;
             honour.AddToClassList("hud__honour--shown");
             honourFade?.Pause();
-            honourFade = honour.schedule.Execute(() => honour.RemoveFromClassList("hud__honour--shown")).StartingIn((long)(seconds * 1000f));
+            Later("honour", seconds, () => honour.RemoveFromClassList("hud__honour--shown"));
         }
 
         /// <summary>Frost over the view (inside the pod), 0 to 1.</summary>
@@ -322,7 +339,7 @@ namespace Game
             label.text = text;
             label.AddToClassList(shown);
             fade?.Pause();
-            fade = label.schedule.Execute(() => label.RemoveFromClassList(shown)).StartingIn((long)(seconds * 1000f));
+            Later("flash " + shown, seconds, () => label.RemoveFromClassList(shown));
         }
 
         void Build()
