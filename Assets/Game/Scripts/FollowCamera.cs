@@ -139,9 +139,10 @@ namespace Game
             if (UnityEngine.Rendering.RenderPipeline.SupportsRenderRequest(view, request)) UnityEngine.Rendering.RenderPipeline.SubmitRenderRequest(view, request);
             else
             {
+                var was = view.targetTexture;
                 view.targetTexture = target;
                 view.Render();
-                view.targetTexture = null;
+                view.targetTexture = was;
             }
             var picture = new Texture2D(width, height, TextureFormat.RGB24, false);
             var previous = RenderTexture.active;

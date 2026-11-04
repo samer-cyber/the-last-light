@@ -414,6 +414,45 @@ namespace Game
             drone.Snap();
         }
 
+        /// <summary>
+        /// Skips the waking but stays inside (tests, filming): the survivor in the hall before their pod, the panel
+        /// quiet, the door still frozen, every protocol kept, Spark free to talk.
+        /// </summary>
+        public void SkipInside()
+        {
+            if (arrived) return;
+            StopCoroutine(arriving);
+            hud.Black = 0f;
+            hud.White = 0f;
+            hud.HideCard();
+            hud.HideHint();
+            hud.Frost(0f);
+            traveller.Scripted = false;
+            follow.Scripted = false;
+            drone.Listening = false;
+            arrived = true;
+            stage = Stage.Cross;
+            if (ambience) ambience.volume = ambienceVolume;
+            if (wind) wind.volume = windVolume;
+            if (music && music.clip && !music.isPlaying)
+            {
+                music.volume = musicVolume;
+                music.Play();
+            }
+            lines = Mathf.Max(lines, 1);
+            quietSince = Time.time;
+            rambleFrom = Time.time;
+            follow.EndShot();
+            ShowSurvivor(true);
+            drone.Release();
+            if (podLid) podLid.localRotation *= Quaternion.Euler(0f, -115f, 0f);
+            StopAlarm();
+            if (podPanel) podPanel.Ready = false;
+            Vector3 facing = Flat(traveller.Facing).normalized;
+            traveller.Place(traveller.transform.position + facing * 2.2f, Mathf.Atan2(facing.x, facing.z) * Mathf.Rad2Deg);
+            drone.Snap();
+        }
+
         // ---- The beginning ----
 
         /// <summary>
@@ -491,8 +530,9 @@ namespace Game
             follow.Face(Mathf.Atan2(facing.x, facing.z) * Mathf.Rad2Deg, 8f);
             follow.Scripted = false;
             drone.Release();
+            // Out of the alcove and into the hall, where there is room to turn.
             traveller.Drive = new Vector2(0f, 0.6f);
-            yield return new WaitForSeconds(1.1f);
+            yield return new WaitForSeconds(2.3f);
             traveller.Drive = Vector2.zero;
             if (ambience) StartCoroutine(Tween(3f, k => ambience.volume = ambienceVolume * (0.5f + 0.5f * k)));
             // Their pod's panel is shrieking. Spark has never managed to quiet it; the survivor's hands can.
@@ -650,6 +690,11 @@ namespace Game
             drone.GoTo = vaultDoor ? vaultDoor.position + Vector3.up * 0.4f + vaultDoor.forward * -1.2f : drone.transform.position;
             drone.LookAt = vaultDoor ? vaultDoor.position : traveller.transform.position;
             yield return new WaitForSeconds(0.8f);
+            // What it made by the door goes back to snow before the door swings through it.
+            if (vaultDoor)
+                foreach (var b in maker.Made.ToArray())
+                    if (b && Vector3.Distance(Flat(b.transform.position), Flat(vaultDoor.position)) < 3.2f && b.transform.position.z < vaultDoor.position.z + 0.5f)
+                        StartCoroutine(maker.Unmake(b));
             if (vaultDoor)
             {
                 drone.Beam(vaultDoor.position + vaultDoor.right * 1.33f);

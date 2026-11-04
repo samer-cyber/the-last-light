@@ -22,6 +22,8 @@ namespace Game.Building
 
             // Sized and stood on the ground by its skeleton (toes to head): the skin's import scale can't be trusted.
             var made = (GameObject)PrefabUtility.InstantiatePrefab(model);
+            // Unpacked, so its new clothes (materials) are saved with the scene rather than lost as unrecorded overrides.
+            PrefabUtility.UnpackPrefabInstance(made, PrefabUnpackMode.Completely, InteractionMode.AutomatedAction);
             made.name = "Survivor Look";
             var own = made.transform.localRotation;
             made.transform.SetParent(f.Body, false);

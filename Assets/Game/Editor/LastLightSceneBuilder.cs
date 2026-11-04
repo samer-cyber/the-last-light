@@ -436,9 +436,13 @@ namespace Game.Building
 
             // Everything solid in the world can be stood on and kept out of: a collider for each shape that has none
             // (light, glow, writing and windows are not solid; moving things have their own).
+            // Not what is hidden (the empty pods' glass) nor the survivor's own pod, which they must walk out of
+            // (its floor and its panel have colliders of their own).
+            var yourPod = GameObject.Find("Your Pod");
             foreach (var r in world.GetComponentsInChildren<MeshRenderer>(true))
             {
                 if (r.GetComponent<Collider>() || r.GetComponentInParent<Rigidbody>()) continue;
+                if (!r.enabled || yourPod && r.transform.IsChildOf(yourPod.transform)) continue;
                 string n = r.name;
                 if (new[] { "Glow", "Beam", "Shaft", "Writing", "Light Line", "Window", "Band", "Flame", "Ghost", "Face" }.Any(n.Contains)) continue;
                 var filter = r.GetComponent<MeshFilter>();
