@@ -68,6 +68,10 @@ namespace Game
         public Machine AimedMachine { get; private set; }
         /// <summary>A panel or switch in reach that [E] would touch: the one looked at, or the nearest in front.</summary>
         public Touchable AimedTouch { get; private set; }
+        /// <summary>Something written or drawn in view and near enough to look at closely with [E].</summary>
+        public Readable AimedReadable { get; private set; }
+        /// <summary>They looked closely at something written or drawn.</summary>
+        public event Action<Readable> Read;
         /// <summary>When set, the head turns to this (the drone, while they talk).</summary>
         public Vector3? Attending { get; set; }
         /// <summary>The last time the survivor reached for something (the body animates it).</summary>
@@ -98,7 +102,10 @@ namespace Game
         {
             float dt = Time.deltaTime;
             var keys = Keyboard.current;
-            bool free = !Typing && !Scripted && !falling && keys != null;
+            // A page held up close: [E] or [Esc] puts it down; nothing else moves them meanwhile.
+            bool reading = hud && hud.Inspecting;
+            if (reading && keys != null && (keys.eKey.wasPressedThisFrame || keys.escapeKey.wasPressedThisFrame)) hud.EndInspect();
+            bool free = !Typing && !Scripted && !falling && keys != null && !reading;
 
             // Riding a lift: move with it first. The storm's wind pushes too.
             if (riding && riding.Delta.sqrMagnitude > 0f) controller.Move(riding.Delta);
@@ -217,6 +224,12 @@ namespace Game
         /// <summary>[E]: set the heart in its socket, set down what is held, or pick up what is in reach.</summary>
         public void Use()
         {
+            // A page held up close: [E] puts it down.
+            if (hud && hud.Inspecting)
+            {
+                hud.EndInspect();
+                return;
+            }
             if (Holding)
             {
                 if (aimedSocket && !aimedSocket.Full && Holding.GetComponent<Heart>() && Vector3.Distance(aimedSocket.Seat, transform.position) < reach + 1.2f)
@@ -239,6 +252,12 @@ namespace Game
                 ReachedAt = Time.time;
                 ReachedFor = AimedTouch.transform.position;
                 AimedTouch.Touch();
+                return;
+            }
+            if (AimedReadable && hud)
+            {
+                hud.Inspect(AimedReadable.Page, AimedReadable.Title, AimedReadable.Aspect);
+                Read?.Invoke(AimedReadable);
                 return;
             }
             if (!InReach || !InReach.CanHold) return;
@@ -398,6 +417,25 @@ namespace Game
                     }
                 AimedTouch = touched;
             }
+            // Something written or drawn in view, the first thing the view meets that is either solid or a page.
+            AimedReadable = null;
+            if (!Holding)
+            {
+                float nearest = float.MaxValue;
+                foreach (var page in Readable.All)
+                {
+                    if (!page || !page.Page) continue;
+                    var b = page.Bounds;
+                    float away = Vector3.Distance(b.center, transform.position + Vector3.up * 1.4f);
+                    if (away > 3.8f) continue;
+                    Vector3 to = b.center - ray.origin;
+                    float angle = Vector3.Angle(ray.direction, to);
+                    float allowed = Mathf.Max(5f, Mathf.Atan2(b.extents.magnitude, to.magnitude) * Mathf.Rad2Deg + 2f);
+                    if (angle > allowed || angle >= nearest) continue;
+                    nearest = angle;
+                    AimedReadable = page;
+                }
+            }
             if (!hud) return;
             if (Scripted)
             {
@@ -419,6 +457,7 @@ namespace Game
                 hud.Aim(socket ? "the socket" : name, socket ? "[E] set the heart in it" : "[E] put down" + use);
             }
             else if (AimedTouch) hud.Aim(AimedTouch.Title, "[E] " + AimedTouch.Verb);
+            else if (AimedReadable) hud.Aim(AimedReadable.Title, "[E] look closer");
             else if (InReach) hud.Aim(InReach.Title, "[E] pick up");
             else hud.Aim(name, null);
         }

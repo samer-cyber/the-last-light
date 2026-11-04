@@ -28,7 +28,7 @@ namespace Game
         [SerializeField] AudioSource voice;
         [SerializeField] AudioClip moveClip;
         [SerializeField, Tooltip("Speaks in words (ElevenLabs) rather than chirps, when it can.")] bool spoken = true;
-        [SerializeField, Range(0f, 1f), Tooltip("Its lines peak at full scale: this keeps them clear of clipping, and above the footsteps.")] float voiceVolume = 0.65f;
+        [SerializeField, Range(0f, 1f), Tooltip("Its lines peak at full scale: this keeps them clear of clipping, and above the footsteps.")] float voiceVolume = 0.85f;
         [SerializeField, Tooltip("Its own small sounds before a line now and then, by mood, and a hum while it thinks.")] AudioClip curiousChirp, nervousChirp, happyChirp, sadChirp, thinkingHum;
         [SerializeField, Tooltip("Letters a second the subtitles leave time for: the next line waits until this one could be read.")] float readingSpeed = 15f;
         [SerializeField, Tooltip("Snow flung off the shell when it shakes.")] ParticleSystem snowOff;
@@ -130,18 +130,26 @@ namespace Game
             bool facing = Listening || Speaking && !GoTo.HasValue;
             Vector3 target = GoTo ?? (facing ? Before() : Home());
             float t = Time.time;
-            target += new Vector3(Mathf.Sin(t * 0.9f) * 0.03f, Mathf.Sin(t * 1.7f) * 0.06f, 0f);
-            if (gesture == "DROOP" && Time.time - gestureAt < 2.2f) target += Vector3.down * 0.18f;
-            if (gesture == "BACK" && Time.time - gestureAt < 3.5f && !GoTo.HasValue)
+            string feeling = Mood;
+            float lively = feeling is "HAPPY" or "PLAYFUL" ? (Speaking ? 1f : 0.5f) : 0f;
+            float low = feeling is "SAD" or "HURT" ? 1f : 0f;
+            target += new Vector3(Mathf.Sin(t * (0.9f + 1.5f * lively)) * (0.03f + 0.05f * lively),
+                Mathf.Sin(t * (1.7f + 2.8f * lively) * (1f - 0.35f * low)) * (0.06f + 0.08f * lively), 0f);
+            if (low > 0f && !GoTo.HasValue) target += Vector3.down * 0.1f;
+            float gestureAge = Time.time - gestureAt;
+            if (gesture == "DROOP" && gestureAge >= 0f && gestureAge < 2.6f) target += Vector3.down * 0.18f;
+            if (gesture == "BACK" && gestureAge >= 0f && gestureAge < 3.5f && !GoTo.HasValue)
             {
                 // Away from the survivor, a little higher: out of reach.
                 Vector3 away = Flat(transform.position - traveller.transform.position);
                 target += (away.sqrMagnitude > 0.01f ? away.normalized : Vector3.back) * 1.6f + Vector3.up * 0.5f;
             }
-            if (gesture == "BOUNCE") target += Vector3.up * Mathf.Abs(Mathf.Sin((Time.time - gestureAt) * 9f)) * 0.14f * Mathf.Clamp01(1.2f - (Time.time - gestureAt));
-            // Far errands are flown fast; close by it drifts.
-            float speed = GoTo.HasValue ? Mathf.Clamp(Vector3.Distance(transform.position, target) * 0.9f, 9f, 24f) : 7f;
-            transform.position = Vector3.SmoothDamp(transform.position, target, ref velocity, GoTo.HasValue ? 0.6f : 0.35f, speed);
+            if (gesture == "BOUNCE" && gestureAge >= 0f) target += Vector3.up * Mathf.Abs(Mathf.Sin(gestureAge * 9f)) * 0.14f * Mathf.Clamp01(1.2f - gestureAge);
+            // Far errands are flown fast; close by it drifts, unhurried.
+            float speed = GoTo.HasValue ? Mathf.Clamp(Vector3.Distance(transform.position, target) * 0.8f, 6f, 18f) : 5.5f;
+            Vector3 from = transform.position;
+            Vector3 next = Vector3.SmoothDamp(from, target, ref velocity, GoTo.HasValue ? 0.75f : 0.45f, speed);
+            transform.position = Clear(from, next);
 
             // Where the eye looks: at the survivor's face while talking, at what it was sent to, else where they look.
             Vector3 look = facing ? camera : LookAt ?? traveller.AimPoint ?? transform.position + (travellerBody ? travellerBody.forward : Vector3.forward) * 6f;
@@ -204,6 +212,50 @@ namespace Game
             }
         }
 
+        SphereCollider probe;
+        const float Body = 0.3f;
+
+        /// <summary>
+        /// Where it can be on its way from one point to the next: it slides along what it meets, and is pushed out of
+        /// anything that came into it (a door swinging, a thing made beside it). Never the survivor or what it carries.
+        /// </summary>
+        Vector3 Clear(Vector3 from, Vector3 to)
+        {
+            if (!probe)
+            {
+                var holder = new GameObject("Drone Body") { layer = gameObject.layer };
+                holder.transform.SetParent(transform, false);
+                probe = holder.AddComponent<SphereCollider>();
+                probe.isTrigger = true;
+                probe.radius = Body;
+            }
+            int mask = ~(1 << gameObject.layer) & ~(1 << traveller.gameObject.layer) & ~(1 << 2);
+            Vector3 move = to - from;
+            float distance = move.magnitude;
+            if (distance > 1e-4f && Physics.SphereCast(from, Body, move / distance, out var hit, distance, mask, QueryTriggerInteraction.Ignore) && !Ours(hit.collider))
+            {
+                Vector3 rest = Vector3.ProjectOnPlane(move, hit.normal) * (1f - hit.distance / distance);
+                to = from + move / distance * Mathf.Max(0f, hit.distance - 0.02f) + rest;
+                velocity = Vector3.ProjectOnPlane(velocity, hit.normal);
+            }
+            foreach (var c in Physics.OverlapSphere(to, Body, mask, QueryTriggerInteraction.Ignore))
+            {
+                if (Ours(c)) continue;
+                if (Physics.ComputePenetration(probe, to, Quaternion.identity, c, c.transform.position, c.transform.rotation, out var direction, out float depth))
+                    to += direction * (depth + 0.01f);
+            }
+            return to;
+        }
+
+        /// <summary>Part of the survivor, of itself, or of something it or the survivor carries.</summary>
+        bool Ours(Collider c)
+        {
+            var t = c.transform;
+            if (t.IsChildOf(transform) || t.IsChildOf(traveller.transform)) return true;
+            var held = c.GetComponentInParent<Holdable>();
+            return held && held.Held;
+        }
+
         void Fall(float dt)
         {
             velocity += Vector3.down * 9f * dt;
@@ -221,7 +273,10 @@ namespace Game
         }
 
         /// <summary>A small motion for how it feels.</summary>
-        public void Feel(string mood)
+        public void Feel(string mood) => Feel(mood, 0f);
+
+        /// <summary>A small motion for how it feels, some seconds from now (so it comes with the words).</summary>
+        public void Feel(string mood, float after)
         {
             this.mood = mood;
             moodUntil = Time.time + (mood is "SCARED" or "ANGRY" or "HURT" or "SAD" ? 40f : 15f);
@@ -238,7 +293,7 @@ namespace Game
                 "ANGRY" => "SNAP",
                 _ => "",
             };
-            gestureAt = Time.time;
+            gestureAt = Time.time + after;
         }
 
         /// <summary>Shakes the snow off its shell, like a dog out of water.</summary>
@@ -262,6 +317,7 @@ namespace Game
         Quaternion Gesture()
         {
             float age = Time.time - gestureAt;
+            if (age < 0f) return Quaternion.identity;
             switch (gesture)
             {
                 case "NOD" when age < 0.9f: return Quaternion.Euler(Mathf.Sin(age * 14f) * 18f * (1f - age / 0.9f), 0f, 0f);
@@ -302,7 +358,6 @@ namespace Game
             if (chirps) clip = DroneVoice.Chirps(line, mood);
             envelope = chirps ? null : SparkVoice.Envelope(clip);
             float seconds = clip.length;
-            Feel(mood);
             // Now and then, a sound of its own first: a curious warble, a nervous double beep, a happy trill.
             var chirp = given || quick ? null : Chirp(mood);
             if (chirp && voice)
@@ -315,11 +370,12 @@ namespace Game
                 voice.pitch = 1f;
                 voice.PlayOneShot(clip, chirps ? 0.75f : voiceVolume);
             }
+            Feel(mood, mood is "SAD" or "HURT" ? Mathf.Min(0.7f, seconds * 0.3f) : mood is "HAPPY" or "PLAYFUL" ? 0.05f : 0.25f);
             Saying = line;
             speakStart = Time.time;
             speakingUntil = Time.time + seconds;
             // A breath before the next line, and time to have read this one.
-            heldUntil = Mathf.Max(speakingUntil + 0.7f, speakStart + line.Length / readingSpeed);
+            heldUntil = Mathf.Max(speakingUntil + 1.1f, speakStart + line.Length / readingSpeed);
             for (float t = 0f; t < seconds; t += Time.deltaTime)
             {
                 hud.Voice(name, line, Mathf.Clamp01(t / (seconds * 0.9f)));

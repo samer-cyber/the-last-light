@@ -434,6 +434,8 @@ namespace Game.Building
             WireArray(director, "snowSteps", Clips("foley_step_snow", 6));
             WireArray(director, "stoneSteps", Clips("foley_step_stone", 6));
             WireArray(director, "iceSteps", Clips("foley_step_ice", 6));
+            WireArray(director, "metalSteps", Clips("foley_step_metal", 6));
+            Wire(director, ("sealClip", FindClip("pod_seal_hiss")));
 
             // Everything solid in the world can be stood on and kept out of: a collider for each shape that has none
             // (light, glow, writing and windows are not solid; moving things have their own).
@@ -955,6 +957,11 @@ namespace Game.Building
             message.transform.localPosition = new Vector3(-0.6f, 2.15f, side * 0.5f - thick * 0.5f - 0.02f);
             message.transform.localScale = new Vector3(3.6f, 2.25f, 1f);
             message.shadowCastingMode = ShadowCastingMode.Off;
+            // Close enough, it can be read with the survivor's own eyes.
+            var page = message.gameObject.AddComponent<BoxCollider>();
+            page.isTrigger = true;
+            page.size = new Vector3(1f, 1f, 0.05f);
+            message.gameObject.AddComponent<Readable>().Set(Load<Texture2D>($"{Root}/Textures/Maker Message.png"), "Mara's words on the wall");
             landmarks.Add(MakeLandmark("Writing Place", message.transform, message.transform.position, "MESSAGE", "the writing on the wall",
                 "Mara Okonjo's last words, scratched into the station's inner north wall in her hand, too small to read from the door. She came here for the heart in year 98 and never came home", new Vector3(3.6f, 2.2f, 0.3f)));
 

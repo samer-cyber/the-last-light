@@ -648,3 +648,35 @@
     color: rgba(20, 30, 52, 0.98);
     text-shadow: 0 0 10px rgba(255, 255, 255, 0.9);
 }
+
+/* A page looked at closely: dark over the view, the page in its own shape, its title above, how to put it down below. */
+.hud__inspect {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(4, 6, 9, 0.88);
+    align-items: center;
+    justify-content: center;
+    display: none;
+}
+.hud__inspect--shown {
+    display: flex;
+}
+.hud__inspect-title {
+    color: rgb(255, 186, 112);
+    font-size: 18px;
+    letter-spacing: 4px;
+    margin-bottom: 18px;
+    -unity-font-style: bold;
+}
+.hud__inspect-page {
+    -unity-background-scale-mode: scale-to-fit;
+}
+.hud__inspect-hint {
+    color: rgba(238, 234, 226, 0.8);
+    font-size: 16px;
+    margin-top: 20px;
+    letter-spacing: 1px;
+}

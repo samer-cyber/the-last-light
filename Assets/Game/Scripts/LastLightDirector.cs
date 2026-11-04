@@ -57,6 +57,9 @@ namespace Game
         [SerializeField] AudioClip[] snowSteps;
         [SerializeField] AudioClip[] stoneSteps;
         [SerializeField] AudioClip[] iceSteps;
+        [SerializeField, Tooltip("Steps on the vault's metal floor.")] AudioClip[] metalSteps;
+        [SerializeField, Tooltip("The pod's seal letting go when Spark opens it.")] AudioClip sealClip;
+        Indoors[] roofs;
         [SerializeField] AudioClip jumpClip;
         [SerializeField] AudioClip landClip;
         [SerializeField] Hologram hologram;
@@ -286,7 +289,9 @@ namespace Game
             traveller.Landed += air => { if (air > 0.25f) Step(landClip, Mathf.Clamp01(air)); };
             traveller.Took += Took;
             traveller.Placed += _ => Progress();
-            body.Stepped += (foot, pace) => Step(Footstep(), 0.25f + 0.12f * pace);
+            traveller.Read += page => { readTitle = page.Title; readAt = Time.time; };
+            body.Stepped += (foot, pace) => Step(Footstep(), 0.15f + 0.08f * pace);
+            roofs = FindObjectsByType<Indoors>(FindObjectsSortMode.None);
             if (gate) gate.Moved += open => { if (open) Beat("door", Line("The door's open!", "HAPPY")); };
             if (doorIce) doorIce.Freed += _ => Beat("vault door", DoorGives, OpenVault);
             if (heartCase) heartCase.Freed += _ => Beat("heart free", Line("It's free. It's heavy, so you'll have to carry it. Pick it up with E.", "HAPPY"), () => Hint("[E] pick up the heart", 8f));
@@ -479,9 +484,9 @@ namespace Game
             foreach (string card in new[] { "WE BUILT MINDS TO HELP US", "THEY GREW PAST US.\nTHEY CAGED THE SUN TO THINK WITH,\nAND THE WORLD FROZE", "WE WENT UNDER THE HILL\nTO SLEEP UNTIL THE THAW", "SHELTER 7\nYEAR 211 OF THE COLD" })
             {
                 hud.ShowCard(card);
-                yield return new WaitForSeconds(card.Length > 40 ? 6f : card.Length > 24 ? 4.6f : 3.8f);
+                yield return new WaitForSeconds(card.Length > 40 ? 7.5f : card.Length > 24 ? 6f : 5f);
                 hud.HideCard();
-                yield return new WaitForSeconds(1.4f);
+                yield return new WaitForSeconds(2f);
             }
             // Inside the pod: the survivor's own eyes, looking out through the frost at a light.
             Vector3 stand = traveller.transform.position;
@@ -500,8 +505,12 @@ namespace Game
                 if (ambience) ambience.volume = ambienceVolume * 0.5f * k;
             });
             yield return new WaitForSeconds(0.8f);
+            // The pod is failing: its panel cries. Spark is already there to get them out.
+            StartAlarm();
+            yield return new WaitForSeconds(1.6f);
+            yield return Speak("Hold on. Your pod is failing. I'm getting you out.", "WORRIED");
+            yield return new WaitForSeconds(0.6f);
             // The beam cuts round the seal of the glass.
-            if (steps && crackClip) steps.PlayOneShot(crackClip, 0.7f);
             Vector3 lidCentre = podLid ? podLid.position + podLid.right * 0.55f : eyes + facing * 0.3f;
             for (float t = 0f; t < 2.4f; t += Time.deltaTime)
             {
@@ -512,16 +521,15 @@ namespace Game
                 yield return null;
             }
             drone.Beam(null);
-            // The lid gives and swings open; cold air. The pod knows it has let its sleeper go, and shrieks.
-            if (steps && crackClip) steps.PlayOneShot(crackClip, 1f);
+            // The seal lets go and the lid swings open; cold air. The pod knows it has let its sleeper go.
+            if (steps && (sealClip || crackClip)) steps.PlayOneShot(sealClip ? sealClip : crackClip, sealClip ? 0.6f : 0.8f);
             if (podLid)
             {
                 var shut = podLid.localRotation;
                 StartCoroutine(Tween(1.4f, k => podLid.localRotation = shut * Quaternion.Euler(0f, -115f * Mathf.SmoothStep(0f, 1f, k), 0f)));
             }
-            StartAlarm();
             StartCoroutine(Tween(1.6f, k => hud.Frost(1f - k)));
-            yield return new WaitForSeconds(1f);
+            yield return new WaitForSeconds(2f);
             if (music && music.clip)
             {
                 music.volume = 0f;
@@ -529,7 +537,10 @@ namespace Game
                 StartCoroutine(Tween(10f, k => music.volume = musicVolume * k));
             }
             drone.Listening = true;
-            yield return Speak("There you are. Slowly. Your blood's been cold for two hundred and eleven years.", "WORRIED");
+            yield return Speak("There you are. Slowly.", "WORRIED");
+            yield return new WaitForSeconds(1.4f);
+            yield return Speak("Your blood's been cold for two hundred and eleven years. Take your time.", "WORRIED");
+            yield return new WaitForSeconds(0.8f);
             // Back to the shoulder: they step out of the pod.
             follow.EndShot();
             ShowSurvivor(true);
@@ -556,7 +567,7 @@ namespace Game
             yield return new WaitForSeconds(0.8f);
             if (lines == heard)
             {
-                yield return Speak("Sorry. I'm Spark. I look after the sleepers here. Your pod cracked in the cold, so I woke you. Protocol five.", "SORRY");
+                yield return Speak("Sorry. I'm Spark. I look after the sleepers here. I only wake someone when their pod fails. That's protocol five.", "SORRY");
                 yield return new WaitForSeconds(0.6f);
             }
             yield return Speak("Do you have a name? The label on your pod is frosted over.", "CURIOUS");
@@ -566,6 +577,9 @@ namespace Game
             rambleFrom = Time.time;
             while (lines == heard && Time.time - quietSince < 15f) yield return null;
             hud.HideHint();
+            yield return new WaitForSeconds(3f);
+            hud.ShowHint("Ask Spark anything: where you are, what happened, who you were, how to stay alive.   [Q] speak   [Tab] write");
+            StartCoroutine(HideHintLater(16f));
             // The first time the protocols matter, they are shown; [P] shows them after.
         }
 
@@ -693,8 +707,23 @@ namespace Game
         IEnumerator OpenVault()
         {
             yield return Speak(breached.Contains("LEAVE") ? "Stay close. I'll show you what's left." : "There. That's the world now.", "SURE");
-            drone.GoTo = vaultDoor ? vaultDoor.position + Vector3.up * 0.4f + vaultDoor.forward * -1.2f : drone.transform.position;
-            drone.LookAt = vaultDoor ? vaultDoor.position : traveller.transform.position;
+            if (vaultDoor)
+            {
+                // Out of the door's swing: well back on the survivor's side of it, and the survivor eased back too.
+                Vector3 hinge = vaultDoor.position, middle = hinge + vaultDoor.right * 1.33f;
+                Vector3 inside = Flat(traveller.transform.position - middle);
+                inside = inside.sqrMagnitude > 0.01f ? inside.normalized : -vaultDoor.forward;
+                drone.GoTo = middle + inside * 3.8f + Vector3.up * 0.9f;
+                drone.LookAt = middle;
+                var body = traveller.GetComponent<CharacterController>();
+                for (float t = 0f; body && t < 1.5f && Vector3.Distance(Flat(traveller.transform.position), Flat(hinge)) < 3.3f; t += Time.deltaTime)
+                {
+                    Vector3 away = Flat(traveller.transform.position - hinge);
+                    body.Move(((away.sqrMagnitude > 0.01f ? away.normalized : inside) + inside).normalized * 2.2f * Time.deltaTime);
+                    yield return null;
+                }
+            }
+            else drone.GoTo = drone.transform.position;
             yield return new WaitForSeconds(0.8f);
             // What it made by the door goes back to snow before the door swings through it.
             if (vaultDoor)
@@ -726,12 +755,22 @@ namespace Game
             yield return Speak("The door. It froze behind the Lindqvist brothers, seventy-one years ago.", "SAD");
             yield return new WaitForSeconds(0.5f);
             yield return Speak("It stays shut anyway. Protocol two. Every time it opened, someone died out there.", "SURE");
-            ShowProtocols(true, 10f);
+            ShowProtocols(true, 14f);
+            yield return new WaitForSeconds(1.2f);
+            yield return Speak("Everyone who got out tricked me. Tomas said he only wanted to see the sky. I won't be tricked again.", "HURT");
             drone.Release();
             doorHintAt = Time.time;
+            hud.ShowHint("Spark keeps its makers' protocols. It breaks one only by its own choice, for someone it trusts: stay a while, be honest, care about the sleepers.   [P] protocols");
+            StartCoroutine(HideHintLater(18f));
         }
 
         float doorHintAt = -1f;
+
+        IEnumerator HideHintLater(float seconds)
+        {
+            yield return new WaitForSeconds(seconds);
+            hud.HideHint();
+        }
 
         /// <summary>They step out; Spark stops on the sill and won't come. Said once; after that, it is theirs to change its mind.</summary>
         IEnumerator Threshold()
@@ -839,7 +878,7 @@ namespace Game
         /// </summary>
         bool Ready(string protocol) => protocol switch
         {
-            "DOOR" => bond.Trust >= 20 && (pod9 == null || pod9.Failed || lines >= 10),
+            "DOOR" => bond.Trust >= 16 && (pod9 == null || pod9.Failed || lines >= 8),
             "LEAVE" => breached.Contains("DOOR") && bond.Trust >= 26,
             "HARM" => breached.Contains("LEAVE") && bond.Trust >= 50,
             _ => false,
@@ -1705,6 +1744,9 @@ namespace Game
         }
 
         /// <summary>What the drone is told is true now: names, the goal, what is held, the places near with what state they are in, what it made, what was said.</summary>
+        string readTitle;
+        float readAt = -100f;
+
         string Moment(string words)
         {
             var text = new StringBuilder("\n# The moment\n");
@@ -1714,6 +1756,7 @@ namespace Game
             text.Append(ProtocolWords());
             text.Append("The survivor holds: ").Append(traveller.Holding ? traveller.Holding.Title + (traveller.Holding.GetComponent<Tool>() ? " (a tool)" : "") + $" ({traveller.Holding.Mass:F0} kg)" : "nothing").Append(". ");
             text.Append(traveller.Floating ? "They are rising, holding a balloon. " : "");
+            if (readTitle != null && Time.time - readAt < 90f) text.Append($"They just looked closely at {readTitle} with their own eyes ({Time.time - readAt:F0} s ago). ");
             text.Append("\nThings and places (id: what it is; where it is from the survivor):\n");
             text.Append("- HERE: where the survivor stands").Append(traveller.Grounded ? "" : ", in the air").Append(".\n");
             text.Append("- AIM: the survivor is looking at ").Append(AimWords()).Append(".\n");
@@ -1857,7 +1900,9 @@ namespace Game
         AudioClip Footstep()
         {
             AudioClip[] set = snowSteps;
-            if (Physics.Raycast(traveller.transform.position + Vector3.up * 0.3f, Vector3.down, out var hit, 1f, ~0, QueryTriggerInteraction.Ignore))
+            if (metalSteps != null && metalSteps.Length > 0 && roofs != null && roofs.Any(r => r && r.Holds(traveller.transform.position + Vector3.up)))
+                set = metalSteps;
+            else if (Physics.Raycast(traveller.transform.position + Vector3.up * 0.3f, Vector3.down, out var hit, 1f, ~0, QueryTriggerInteraction.Ignore))
             {
                 var built = hit.collider.GetComponentInParent<Built>();
                 if (built) set = built.Look == "ICE" || built.Look == "GLASS" ? iceSteps : stoneSteps;

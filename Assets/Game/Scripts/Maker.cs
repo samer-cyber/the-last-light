@@ -938,6 +938,8 @@ namespace Game
                 else if (piece.GetComponent<Renderer>().sharedMaterial == looks[LookIndex("ICE")] && slippery) collider.sharedMaterial = slippery;
             }
 
+            if (loose && (spec.look == "SNOW" || spec.look == "ICE") && spec.form != "FIRE")
+                holder.gameObject.AddComponent<Melt>();
             if (loose)
             {
                 var body = holder.gameObject.AddComponent<Rigidbody>();
@@ -1114,9 +1116,67 @@ namespace Game
             }
         }
 
+        /// <summary>One layer of a fire: particles from a narrow cone pointing up.</summary>
+        ParticleSystem FireLayer(string name, Transform parent, Vector3 at, float life0, float life1, float speed0, float speed1,
+            float size0, float size1, Color start0, Color start1, Color end, float rate, float radius, float angle, float noise, int most)
+        {
+            var system = new GameObject(name).AddComponent<ParticleSystem>();
+            system.transform.SetParent(parent, false);
+            system.transform.position = at;
+            system.transform.rotation = Quaternion.Euler(-90f, 0f, 0f);
+            var main = system.main;
+            main.startLifetime = new ParticleSystem.MinMaxCurve(life0, life1);
+            main.startSpeed = new ParticleSystem.MinMaxCurve(speed0, speed1);
+            main.startSize = new ParticleSystem.MinMaxCurve(size0, size1);
+            main.startRotation = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
+            main.startColor = new ParticleSystem.MinMaxGradient(start0, start1);
+            main.simulationSpace = ParticleSystemSimulationSpace.World;
+            main.maxParticles = most;
+            var emission = system.emission;
+            emission.rateOverTime = rate;
+            var shape = system.shape;
+            shape.shapeType = ParticleSystemShapeType.Cone;
+            shape.angle = angle;
+            shape.radius = radius;
+            if (noise > 0f)
+            {
+                var n = system.noise;
+                n.enabled = true;
+                n.strength = noise;
+                n.frequency = 1.4f;
+                n.scrollSpeed = 1.1f;
+            }
+            var colour = system.colorOverLifetime;
+            colour.enabled = true;
+            var gradient = new Gradient();
+            gradient.SetKeys(new[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(end, 1f) },
+                new[] { new GradientAlphaKey(0f, 0f), new GradientAlphaKey(1f, 0.12f), new GradientAlphaKey(0f, 1f) });
+            colour.color = gradient;
+            var renderer = system.GetComponent<ParticleSystemRenderer>();
+            renderer.sharedMaterial = flame;
+            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            return system;
+        }
+
         /// <summary>Flames over a fire: soft additive flickers rising and fading.</summary>
         void Flames(Transform parent, Vector3 at, float size)
         {
+            float f = Mathf.Clamp(size, 0.5f, 2f);
+            // The heart of it: small, quick, nearly white.
+            FireLayer("Fire Heart", parent, at + Vector3.down * 0.05f, 0.25f, 0.45f, 0.4f * f, 0.9f * f, 0.18f * f, 0.4f * f,
+                new Color(1f, 0.92f, 0.7f, 0.9f), new Color(1f, 0.75f, 0.4f, 0.8f), new Color(1f, 0.45f, 0.12f), 55f * f, 0.14f * f, 6f, 0.2f * f, 160);
+            // Sparks that climb and wander.
+            var sparks = FireLayer("Sparks", parent, at + Vector3.up * 0.15f, 0.9f, 1.9f, 1.1f * f, 2.4f * f, 0.025f, 0.055f,
+                new Color(1f, 0.78f, 0.35f, 1f), new Color(1f, 0.55f, 0.18f, 1f), new Color(1f, 0.3f, 0.05f), 9f * f, 0.2f * f, 22f, 0.9f, 60);
+            var sparkSize = sparks.sizeOverLifetime;
+            sparkSize.enabled = true;
+            sparkSize.size = new ParticleSystem.MinMaxCurve(1f, new AnimationCurve(new Keyframe(0f, 1f), new Keyframe(1f, 0.2f)));
+            // A warm haze over it, lit from below, drifting up and spreading.
+            var haze = FireLayer("Fire Haze", parent, at + Vector3.up * 0.7f * f, 2.2f, 3.4f, 0.35f * f, 0.7f * f, 0.6f * f, 1.1f * f,
+                new Color(0.45f, 0.22f, 0.1f, 0.22f), new Color(0.3f, 0.16f, 0.09f, 0.16f), new Color(0.12f, 0.08f, 0.06f), 7f * f, 0.25f * f, 10f, 0.35f, 40);
+            var hazeSize = haze.sizeOverLifetime;
+            hazeSize.enabled = true;
+            hazeSize.size = new ParticleSystem.MinMaxCurve(1f, new AnimationCurve(new Keyframe(0f, 0.6f), new Keyframe(1f, 2.2f)));
             var system = new GameObject("Flames").AddComponent<ParticleSystem>();
             system.transform.SetParent(parent, false);
             system.transform.position = at;

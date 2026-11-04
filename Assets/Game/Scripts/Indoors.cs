@@ -23,6 +23,9 @@ namespace Game
 
         void Awake() => box = GetComponent<BoxCollider>();
 
+        /// <summary>Whether a point is under this roof.</summary>
+        public bool Holds(Vector3 point) => (box ? box : box = GetComponent<BoxCollider>()) && box.bounds.Contains(point);
+
         void Start()
         {
             sun = RenderSettings.sun;

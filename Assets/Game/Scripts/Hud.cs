@@ -252,6 +252,7 @@ namespace Game
             }
             frost.style.opacity = amount;
             frost.style.display = amount > 0.001f ? DisplayStyle.Flex : DisplayStyle.None;
+            voice.EnableInClassList("hud__voice--memory", amount > 0.3f);
         }
 
         Texture2D frostTexture;
@@ -340,6 +341,42 @@ namespace Game
             label.AddToClassList(shown);
             fade?.Pause();
             Later("flash " + shown, seconds, () => label.RemoveFromClassList(shown));
+        }
+
+        VisualElement inspect, inspectPage;
+        Label inspectTitle, inspectHint;
+
+        /// <summary>Whether a page is shown large over the view.</summary>
+        public bool Inspecting { get; private set; }
+
+        /// <summary>Shows a page large over the view (a note, a poster, a screen), in its own shape, with its title.</summary>
+        public void Inspect(Texture2D page, string title, float aspect, string hint = "[E] put it down")
+        {
+            Build();
+            inspectTitle.text = (title ?? "").ToUpperInvariant();
+            inspectHint.text = hint ?? "";
+            inspectPage.style.backgroundImage = new StyleBackground(page);
+            float width = layer.resolvedStyle.width, height = layer.resolvedStyle.height;
+            if (float.IsNaN(width) || width < 10f) { width = 1920f; height = 1080f; }
+            aspect = Mathf.Max(0.2f, aspect);
+            float h = height * 0.7f, w = h * aspect;
+            if (w > width * 0.82f)
+            {
+                w = width * 0.82f;
+                h = w / aspect;
+            }
+            inspectPage.style.width = w;
+            inspectPage.style.height = h;
+            inspect.AddToClassList("hud__inspect--shown");
+            Inspecting = true;
+        }
+
+        /// <summary>Puts the page down.</summary>
+        public void EndInspect()
+        {
+            if (inspect == null) return;
+            inspect.RemoveFromClassList("hud__inspect--shown");
+            Inspecting = false;
         }
 
         void Build()
@@ -459,6 +496,15 @@ namespace Game
             card = new Label { pickingMode = PickingMode.Ignore };
             card.AddToClassList("hud__card");
             layer.Add(card);
+            inspect = Element("hud__inspect");
+            inspectTitle = new Label { pickingMode = PickingMode.Ignore };
+            inspectTitle.AddToClassList("hud__inspect-title");
+            inspect.Add(inspectTitle);
+            inspectPage = Part("hud__inspect-page");
+            inspect.Add(inspectPage);
+            inspectHint = new Label { pickingMode = PickingMode.Ignore };
+            inspectHint.AddToClassList("hud__inspect-hint");
+            inspect.Add(inspectHint);
             root.Add(layer);
         }
 

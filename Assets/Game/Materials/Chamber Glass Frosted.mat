@@ -126,10 +126,10 @@ Material:
     - normalTexture_texCoord: 0
     - occlusionTexture_strength: 1
     - occlusionTexture_texCoord: 0
-    - roughnessFactor: 0.55
+    - roughnessFactor: 0.88
     - transmissionFactor: 0
     m_Colors:
-    - baseColorFactor: {r: 0.72, g: 0.82, b: 0.9, a: 0.62}
+    - baseColorFactor: {r: 0.8, g: 0.87, b: 0.93, a: 0.86}
     - baseColorTexture_Rotation: {r: 0, g: 0, b: 0, a: 0}
     - emissiveFactor: {r: 1, g: 1, b: 1, a: 1}
     - emissiveTexture_Rotation: {r: 0, g: 0, b: 0, a: 0}

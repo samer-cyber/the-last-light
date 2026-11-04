@@ -83,11 +83,13 @@ namespace Game.Building
             Renderer Decal(string name, Transform under, string sign, Vector3 at, Vector2 size, Quaternion turn)
             {
                 var look = MakeLit("Sign " + sign, Color.white, 0.15f, 0f);
-                look.SetTexture("_BaseMap", Load<Texture2D>($"{Root}/Textures/Signs/{sign}.png"));
+                var painted = Load<Texture2D>($"{Root}/Textures/Signs/{sign}.png");
+                look.SetTexture("_BaseMap", painted);
                 Transparent(look);
                 var plate = Box(name, under, look, at, new Vector3(size.x, size.y, 0.004f), false);
                 plate.transform.localRotation = turn;
                 plate.shadowCastingMode = ShadowCastingMode.Off;
+                plate.gameObject.AddComponent<Readable>().Set(painted, "a sign: " + name.ToLowerInvariant());
                 return plate;
             }
             Renderer Clue(string name, Transform under, string file, Vector3 at, Vector2 size, Quaternion turn, float glow = 0f, bool clear = false)
@@ -106,6 +108,19 @@ namespace Game.Building
                 var plate = Box(name, under, look, at, new Vector3(size.x, size.y, 0.004f), false);
                 plate.transform.localRotation = turn;
                 plate.shadowCastingMode = ShadowCastingMode.Off;
+                plate.gameObject.AddComponent<Readable>().Set(picture, name switch
+                {
+                    "Tomas Scratch" => "words scratched inside pod 3",
+                    "Mara Note" => "Mara's note",
+                    "Ima Drawing" => "Ima's drawing",
+                    "Brothers Scratch" => "words scratched inside pod 22",
+                    "Hale Label" => "Dr. Hale's label",
+                    "Pod 40 Label" => "your pod's label",
+                    "Protocols Poster" => "the makers' protocols",
+                    "Status Screen" => "the hall's status screen",
+                    "Tally" => "Spark's tally",
+                    _ => name.ToLowerInvariant(),
+                });
                 return plate;
             }
             // A hand wheel on a door face: a hub, four spokes, a rim of eight short bars.
@@ -351,14 +366,30 @@ namespace Game.Building
             var chamberGlow = chamberMaterials.First(m => m.name == "M_glow");
             var chamberGlass = Art.Variant(chamberMaterials.First(m => m.name == "M_glass"), "Chamber Glass Frosted", v =>
             {
-                v.SetColor("baseColorFactor", new Color(0.72f, 0.82f, 0.9f, 0.62f));
-                v.SetFloat("roughnessFactor", 0.55f);
+                v.SetColor("baseColorFactor", new Color(0.8f, 0.87f, 0.93f, 0.86f));
+                v.SetFloat("roughnessFactor", 0.88f);
             });
             Material GlowOf(Material state) => Art.Variant(chamberGlow, "Chamber Glow " + state.name.Replace("Pod Light ", ""), v =>
                 v.SetColor("emissiveFactor", state.GetColor("_EmissionColor")));
             var sleepPose = AssetDatabase.LoadAllAssetsAtPath(AssetDatabase.GetAssetPath(chamberModel)).OfType<AnimationClip>().FirstOrDefault();
             PodLights failing = null;
             Bounds bodyBox = default, glassBox = default;
+            // Frost over the glass of an occupied pod: thick and crystalline, thickest at the bottom and the edges, a
+            // little thinner where a face would be, so a sleeper is only a dim shape behind it.
+            var frostPattern = MakeTexture("Pod Frost", 256, true, (u, v) =>
+            {
+                float grain = Mathf.PerlinNoise(u * 14f, v * 14f) * 0.55f + Mathf.PerlinNoise(u * 46f, v * 46f) * 0.3f + Mathf.PerlinNoise(u * 120f, v * 120f) * 0.15f;
+                float edge = Mathf.Clamp01(Mathf.Abs(u - 0.5f) * 2.4f - 0.55f) + Mathf.Clamp01(0.32f - v) * 1.6f;
+                float face = Mathf.Clamp01(1f - new Vector2((u - 0.5f) * 2.6f, (v - 0.8f) * 4f).magnitude);
+                float a = Mathf.Clamp01(0.7f + grain * 0.28f + edge * 0.3f - face * 0.16f);
+                return new Color(0.86f, 0.92f, 1f, a);
+            });
+            var podFrost = MakeMaterial("Pod Frost", "Universal Render Pipeline/Unlit", m =>
+            {
+                m.SetTexture("_BaseMap", frostPattern);
+                m.SetColor("_BaseColor", new Color(0.36f, 0.42f, 0.5f, 1f));
+            });
+            Transparent(podFrost);
             Transform Pod(int number, float side, float z)
             {
                 var pod = new GameObject($"Pod {number}").transform;
@@ -387,7 +418,14 @@ namespace Game.Building
                         if (empty) r.enabled = false;
                     }
                 }
-                if (!empty) PutSleeper(pod, bodyBox, number);
+                if (!empty)
+                {
+                    PutSleeper(pod, bodyBox, number);
+                    var rime = Box("Pod Frost", pod, podFrost, new Vector3(glassBox.center.x, glassBox.center.y, glassBox.max.z - 0.035f),
+                        new Vector3(glassBox.size.x * 0.86f, glassBox.size.y * 0.92f, 0.004f), false);
+                    rime.shadowCastingMode = ShadowCastingMode.Off;
+                    rime.receiveShadows = false;
+                }
                 var glow = GlowOf(status);
                 foreach (var r in chamber.GetComponentsInChildren<Renderer>(true))
                     r.sharedMaterials = r.sharedMaterials.Select(m => m == null ? m : m.name == "M_glow" ? glow : m.name == "M_glass" ? chamberGlass : m).ToArray();
@@ -534,12 +572,12 @@ namespace Game.Building
             SetValue(panel, "title", "your pod's panel");
             SetValue(panel, "verb", "touch the panel");
             parts.Panel = panel;
-            var panelAlarm = MakeSource("Panel Alarm", console.transform, FindClip("pod_alarm_loop"), true);
+            var panelAlarm = MakeSource("Panel Alarm", console.transform, FindClip("pod_alarm_soft"), true);
             panelAlarm.transform.localPosition = new Vector3(0f, 0.6f, 0.1f);
             panelAlarm.spatialBlend = 0.8f;
             panelAlarm.minDistance = 2.5f;
             panelAlarm.maxDistance = 30f;
-            panelAlarm.volume = 0.55f;
+            panelAlarm.volume = 0.4f;
             parts.Alarm = panelAlarm;
             var alarmLamp = new GameObject("Panel Lamp").AddComponent<Light>();
             alarmLamp.transform.SetParent(console.transform, false);

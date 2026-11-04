@@ -27,7 +27,7 @@ namespace Game
         public event Action<int, float> Stepped;
 
         Vector3 hipsRest;
-        float phase, landDip, lean, breath, cloakSwing, cloakVelocity;
+        float phase, landDip, lean, breath, cloakSwing, cloakVelocity, settled;
         int lastStep = -1;
         Quaternion headRest, neckRest;
 
@@ -66,9 +66,12 @@ namespace Game
             float armSwing = Mathf.Lerp(22f, 48f, run) * moving;
             breath += dt;
 
-            // Legs: a leg swinging forward bends at the knee; in the air both are drawn up.
-            Leg(left, s * swing, Mathf.Max(0f, c) * knee + 6f * moving, air);
-            Leg(right, -s * swing, Mathf.Max(0f, -c) * knee + 6f * moving, air);
+            // Legs: a leg swinging forward bends at the knee; in the air both are drawn up. Standing, the weight
+            // rests on one leg and slowly shifts to the other, both knees soft.
+            settled = Mathf.MoveTowards(settled, air ? 0f : 1f - moving, dt * 2f);
+            float shift = Mathf.Sin(breath * 0.32f);
+            Leg(left, s * swing - settled * 2f, Mathf.Max(0f, c) * knee + 6f * moving + settled * (5f + 4f * shift), air);
+            Leg(right, -s * swing - settled * 2f, Mathf.Max(0f, -c) * knee + 6f * moving + settled * (5f - 4f * shift), air);
 
             // Arms against the legs; bent more when running; one reaches out when gathering.
             float reach = Mathf.Clamp01(1f - (Time.time - traveller.ReachedAt) / 0.7f);
@@ -89,7 +92,7 @@ namespace Game
             landDip = Mathf.MoveTowards(landDip, 0f, dt * 0.5f);
             float bob = moving * (Mathf.Abs(c) * Mathf.Lerp(0.035f, 0.06f, run) - 0.03f);
             hips.localPosition = hipsRest + new Vector3(0f, bob - landDip * 2.5f, 0f);
-            hips.localRotation = Quaternion.Euler(0f, s * 7f * moving, -c * 3f * moving);
+            hips.localRotation = Quaternion.Euler(0f, s * 7f * moving, -c * 3f * moving + settled * shift * 2.2f);
             lean = Mathf.Lerp(lean, Mathf.Lerp(3f, 13f, run) * moving + (air ? 8f : 0f), 1f - Mathf.Exp(-5f * dt));
             float still = 1f - moving;
             spine.localRotation = Quaternion.Euler(lean * 0.5f + landDip * 60f, -s * 5f * moving, 0f);
@@ -134,8 +137,10 @@ namespace Game
             bool isLeft = side.upperArm == left.upperArm;
             float outward = isLeft ? -1f : 1f;
             float lift = air && pose == 0 ? 30f : 0f;
-            var arm = Quaternion.Euler(-swing - lift, 0f, outward * (8f + lift * 0.4f));
-            float elbow = Mathf.Lerp(14f, 70f, run) + (air ? 30f : 0f);
+            // Hanging easy when still: close to the body, a little forward, the elbows soft, swaying with the breath.
+            float hang = settled * (4f + Mathf.Sin(breath * 1.6f + (isLeft ? 0f : 1.3f)) * 1.2f);
+            var arm = Quaternion.Euler(-swing - lift - hang, outward * -settled * 6f, outward * (8f - settled * 3.5f + lift * 0.4f));
+            float elbow = Mathf.Lerp(14f, 70f, run) + (air ? 30f : 0f) + settled * 8f;
             switch (pose)
             {
                 case 1:
