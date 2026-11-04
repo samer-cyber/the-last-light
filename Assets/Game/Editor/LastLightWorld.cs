@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using System.Linq;
+using UnityEditor;
 using UnityEngine;
 using UnityEngine.Rendering;
 using static Game.Building.SceneKit;
@@ -154,6 +156,87 @@ namespace Game.Building
                 part.receiveShadows = true;
                 return part;
             }
+            // Real houses under snow (Sketchfab, CC BY, credited in CREDITS.md), each with the side its door faces in its
+            // own space. Standing houses are these; fallen ones stay as broken walls under snow.
+            var models = new (GameObject prefab, Vector3 front)[]
+            {
+                (AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Game/Art/Sketchfab/TownHouse/TownHouse.glb"), Vector3.left),
+                (AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Game/Art/Sketchfab/TownChalet/TownChalet.glb"), Vector3.forward),
+                (AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Game/Art/Sketchfab/TownCabin/TownCabin.glb"), Vector3.back),
+            };
+            if (models.Any(m => !m.prefab)) Debug.LogWarning("Town: a house model is missing; boxes stand in for it");
+            // Their materials glow faintly in their own colours: the night has almost no light, and the rest of the
+            // world's shaders carry their own fill, so without it the houses would be black shapes.
+            var glows = new Dictionary<Material, Material>();
+            Material Glow(Material m, string model)
+            {
+                if (!m) return m;
+                if (glows.TryGetValue(m, out var known)) return known;
+                // URP Lit with the model's own textures (glTFast's shader graph ignores emission here).
+                string path = $"Assets/Game/Art/Sketchfab/{model}/{model} Glow.mat";
+                var lit = Shader.Find("Universal Render Pipeline/Lit");
+                var copy = AssetDatabase.LoadAssetAtPath<Material>(path);
+                if (!copy)
+                {
+                    copy = new Material(lit);
+                    AssetDatabase.CreateAsset(copy, path);
+                }
+                copy.shader = lit;
+                var colour = m.HasProperty("baseColorTexture") ? m.GetTexture("baseColorTexture") : null;
+                var normal = m.HasProperty("normalTexture") ? m.GetTexture("normalTexture") : null;
+                copy.SetTexture("_BaseMap", colour);
+                copy.SetColor("_BaseColor", m.HasProperty("baseColorFactor") ? m.GetColor("baseColorFactor") : Color.white);
+                copy.SetFloat("_Smoothness", 0.12f);
+                copy.SetFloat("_Metallic", 0f);
+                if (normal)
+                {
+                    copy.SetTexture("_BumpMap", normal);
+                    copy.EnableKeyword("_NORMALMAP");
+                }
+                else copy.DisableKeyword("_NORMALMAP");
+                copy.SetTexture("_EmissionMap", colour);
+                copy.SetColor("_EmissionColor", new Color(0.05f, 0.056f, 0.07f));
+                copy.EnableKeyword("_EMISSION");
+                copy.globalIlluminationFlags = MaterialGlobalIlluminationFlags.None;
+                EditorUtility.SetDirty(copy);
+                glows[m] = copy;
+                return copy;
+            }
+            Bounds Measure(GameObject thing)
+            {
+                var all = thing.GetComponentsInChildren<Renderer>();
+                var b = all.Length > 0 ? all[0].bounds : new Bounds(thing.transform.position, Vector3.zero);
+                foreach (var r in all) b.Encapsulate(r.bounds);
+                return b;
+            }
+            bool RealHouse(Transform house, Vector3 at, Vector3 facing, float ground, int index, bool fallen)
+            {
+                var (prefab, front) = models[(index * 7 + 3) % models.Length];
+                if (!prefab) return false;
+                // The model keeps its own root (Sketchfab's turn from Z-up, its units); a holder turns, sizes and places it.
+                var model = new GameObject(prefab.name);
+                model.transform.SetParent(house, false);
+                Object.Instantiate(prefab, model.transform).name = prefab.name + " Model";
+                model.transform.rotation = Quaternion.LookRotation(facing) * Quaternion.Inverse(Quaternion.LookRotation(front)) * Quaternion.Euler(0f, R(-4f, 4f), 0f);
+                var size = Measure(model).size;
+                float scale = Mathf.Clamp(R(8.5f, 11f) / Mathf.Max(size.x, size.z), 0.6f, 1.6f);
+                model.transform.localScale = Vector3.one * scale;
+                if (fallen)
+                {
+                    // Caved in under two centuries of snow: tilted, and sunk to the windows.
+                    model.transform.rotation = Quaternion.AngleAxis(R(6f, 13f), Quaternion.Euler(0f, R(0f, 360f), 0f) * Vector3.right) * model.transform.rotation;
+                }
+                var b = Measure(model);
+                float sink = fallen ? b.size.y * R(0.35f, 0.55f) : 0.2f;
+                model.transform.position += new Vector3(at.x - b.center.x, ground - sink - b.min.y, at.z - b.center.z);
+                foreach (var r in model.GetComponentsInChildren<Renderer>())
+                {
+                    r.shadowCastingMode = ShadowCastingMode.On;
+                    r.receiveShadows = true;
+                    r.sharedMaterials = r.sharedMaterials.Select(m => Glow(m, prefab.name)).ToArray();
+                }
+                return true;
+            }
             void House(Vector3 at, float yaw, int index)
             {
                 var house = new GameObject($"House {index}").transform;
@@ -162,6 +245,9 @@ namespace Game.Building
                 bool fallen = random.NextDouble() < 0.33;
                 var turn = Quaternion.Euler(0f, yaw, 0f);
                 float ground = Height(at.x, at.z);
+                // Standing houses near the main street face it; the scattered ones face where they were built to.
+                var facing = Mathf.Abs(at.x) < 32f ? new Vector3(-Mathf.Sign(at.x), 0f, 0f) : turn * Vector3.forward;
+                if (RealHouse(house, at, facing, ground, index, fallen)) return;
                 float tall = fallen ? h * R(0.35f, 0.7f) : h;
                 Box("Walls", house, wall, new Vector3(at.x, ground + tall * 0.5f - 0.3f, at.z), new Vector3(w, tall + 0.6f, d), turn * Quaternion.Euler(fallen ? R(-3f, 3f) : 0f, 0f, fallen ? R(-4f, 4f) : 0f));
                 if (!fallen)

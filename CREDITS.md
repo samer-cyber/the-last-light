@@ -15,6 +15,8 @@ mounted_fluorescent_lights, caged_hanging_light, industrial_caged_sconce, modula
 
 **"Man"** by **Pumpkin**, https://sketchfab.com/3d-models/568a4d4d287449c49ac85800d2e239de, licensed under Creative Commons Attribution 4.0 (https://creativecommons.org/licenses/by/4.0/). The survivor and the sleepers: his body, arms and legs are re-dressed in the shelter's suit (a cloth texture made in the game's editor code); the sleepers are baked from him in a resting pose. The game moves the survivor's skeleton itself.
 
+**"PSX Snowy House"** by **Shazly**, https://sketchfab.com/3d-models/c17b3cf25c18488d9857f2dfc04b12f8, **"Snowy North American Chalet Cabin – Low Poly"** by **ARTEL_3D**, https://sketchfab.com/3d-models/44ed4093f2904361898b9cbc3dcc1aa9, and **"Cabin Model - Snowey"** by **alivisualz**, https://sketchfab.com/3d-models/d31ca61470fe4d3ab2e399899088636a, each licensed under Creative Commons Attribution 4.0 (https://creativecommons.org/licenses/by/4.0/). The houses of the frozen town: placed, sized and turned by the game's editor code, some sunk and tilted as if fallen in, their materials moved to URP Lit with a faint glow from their own textures.
+
 **"Male Hooded Character - IDLE [MESHY]"** by **Ethan Cox**, https://sketchfab.com/3d-models/324bb454193f41e9b46e286a06a5a5f9, licensed under Creative Commons Attribution 4.0 (https://creativecommons.org/licenses/by/4.0/). The survivor's earlier look (no longer used in the scene).
 
 ## Signs and clues
