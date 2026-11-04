@@ -102,49 +102,6 @@ namespace Game.Building
             return AssetDatabase.LoadAssetAtPath<AudioClip>(path);
         }
 
-        /// <summary>
-        /// The notebook and pencil held in front of the camera, with materials for a dark room lit only
-        /// by the orb, and the page showing the panel's texture.
-        /// </summary>
-        public static HeldNotebook MakeHeldNotebook(Transform camera, Orb orb, PanelSettings pagePanel)
-        {
-            var held = new GameObject("Held").AddComponent<HeldNotebook>();
-            held.transform.SetParent(camera, false);
-            var notebook = (GameObject)PrefabUtility.InstantiatePrefab(Load<GameObject>($"{Models}/Notebook.fbx"));
-            notebook.transform.SetParent(held.transform, false);
-            var pencil = (GameObject)PrefabUtility.InstantiatePrefab(Load<GameObject>($"{Models}/Pencil.fbx"));
-            pencil.transform.SetParent(held.transform, false);
-
-            var looks = new Dictionary<string, Material>
-            {
-                ["NotebookCover"] = MakeLit("Notebook Cover", new Color(0.09f, 0.11f, 0.2f), 0.35f, 0f),
-                ["Paper"] = MakeLit("Notebook Paper Edge", new Color(0.86f, 0.84f, 0.78f), 0.15f, 0f),
-                ["Wire"] = MakeLit("Wire", new Color(0.62f, 0.62f, 0.66f), 0.75f, 1f),
-                ["PencilPaint"] = MakeLit("Pencil Paint", new Color(0.93f, 0.68f, 0.12f), 0.55f, 0f),
-                ["PencilWood"] = MakeLit("Pencil Wood", new Color(0.86f, 0.66f, 0.45f), 0.25f, 0f),
-                ["PencilGraphite"] = MakeLit("Pencil Graphite", new Color(0.12f, 0.12f, 0.13f), 0.6f, 0.3f),
-                ["Eraser"] = MakeLit("Eraser", new Color(0.88f, 0.52f, 0.55f), 0.1f, 0f),
-            };
-            var pageMaterial = MakeMaterial("Notebook Page", "Game/Page", m => m.SetTexture("_MainTex", pagePanel.targetTexture));
-            Renderer page = null;
-            foreach (var renderer in notebook.GetComponentsInChildren<Renderer>().Concat(pencil.GetComponentsInChildren<Renderer>()))
-            {
-                renderer.shadowCastingMode = ShadowCastingMode.Off;
-                renderer.receiveShadows = false;
-                if (renderer.name == "Page")
-                {
-                    page = renderer;
-                    renderer.sharedMaterial = pageMaterial;
-                    continue;
-                }
-                renderer.sharedMaterials = renderer.sharedMaterials
-                    .Select(m => m != null && looks.TryGetValue(m.name, out var look) ? look : m).ToArray();
-            }
-            if (page == null) throw new InvalidOperationException("Notebook.fbx has no object named Page");
-            Wire(held, ("notebook", notebook.transform), ("page", page), ("pencil", pencil.transform), ("orb", orb));
-            return held;
-        }
-
         public static Material MakeLit(string name, Color colour, float smoothness, float metallic) =>
             MakeMaterial(name, "Universal Render Pipeline/Lit", m =>
             {
@@ -152,42 +109,6 @@ namespace Game.Building
                 m.SetFloat("_Smoothness", smoothness);
                 m.SetFloat("_Metallic", metallic);
             });
-
-        /// <summary>A panel that draws into a render texture shaped like an A6 page, 640 by 902 units.</summary>
-        public static PanelSettings MakeNotebookPanel(ThemeStyleSheet theme)
-        {
-            string texturePath = $"{Root}/UI/Notebook Page.renderTexture";
-            var texture = AssetDatabase.LoadAssetAtPath<RenderTexture>(texturePath);
-            if (texture == null)
-            {
-                texture = new RenderTexture(1024, 1444, 24, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB)
-                {
-                    name = "Notebook Page",
-                    useMipMap = true,
-                    autoGenerateMips = true,
-                    filterMode = FilterMode.Trilinear,
-                    anisoLevel = 4,
-                };
-                AssetDatabase.CreateAsset(texture, texturePath);
-            }
-            string path = $"{Root}/UI/Notebook Panel.asset";
-            var panel = AssetDatabase.LoadAssetAtPath<PanelSettings>(path);
-            if (panel == null)
-            {
-                panel = ScriptableObject.CreateInstance<PanelSettings>();
-                AssetDatabase.CreateAsset(panel, path);
-            }
-            panel.themeStyleSheet = theme;
-            panel.targetTexture = texture;
-            panel.scaleMode = PanelScaleMode.ScaleWithScreenSize;
-            panel.referenceResolution = new Vector2Int(640, 902);
-            panel.screenMatchMode = PanelScreenMatchMode.MatchWidthOrHeight;
-            panel.match = 0f;
-            panel.clearColor = true;
-            panel.colorClearValue = new Color(0.96f, 0.94f, 0.89f);
-            EditorUtility.SetDirty(panel);
-            return panel;
-        }
 
         public static void WireArray(Object target, string field, Object[] values)
         {
@@ -242,56 +163,6 @@ namespace Game.Building
             setUp?.Invoke(material);
             EditorUtility.SetDirty(material);
             return material;
-        }
-
-        /// <summary>
-        /// Sets up the PC renderer: the full-screen warp, then the orb's own light (its layer, left out
-        /// of the ordinary transparent pass) drawn on top of the bent image. Safe to run again.
-        /// </summary>
-        public static void AddRenderPasses(Material warpMaterial, int orbLightLayer)
-        {
-            const string rendererPath = "Assets/Settings/PC_Renderer.asset";
-            var renderer = AssetDatabase.LoadAssetAtPath<UniversalRendererData>(rendererPath) ?? throw new InvalidOperationException($"No renderer at {rendererPath}");
-
-            var warp = AddFeature<FullScreenPassRendererFeature>(renderer, "Warp");
-            warp.passMaterial = warpMaterial;
-            warp.injectionPoint = FullScreenPassRendererFeature.InjectionPoint.BeforeRenderingPostProcessing;
-            warp.requirements = ScriptableRenderPassInput.Color | ScriptableRenderPassInput.Depth;
-            warp.fetchColorBuffer = true;
-            warp.SetActive(true);
-
-            var light = AddFeature<RenderObjects>(renderer, "Orb Light");
-            light.settings.Event = RenderPassEvent.BeforeRenderingPostProcessing;
-            light.settings.filterSettings.RenderQueueType = RenderQueueType.Transparent;
-            light.settings.filterSettings.LayerMask = 1 << orbLightLayer;
-            light.SetActive(true);
-
-            renderer.transparentLayerMask = ~(1 << orbLightLayer);
-            EditorUtility.SetDirty(warp);
-            EditorUtility.SetDirty(light);
-            EditorUtility.SetDirty(renderer);
-            AssetDatabase.SaveAssets();
-        }
-
-        /// <summary>The renderer's feature of that type and name, added at the end of its list if missing.</summary>
-        public static T AddFeature<T>(UniversalRendererData renderer, string name) where T : ScriptableRendererFeature
-        {
-            var feature = renderer.rendererFeatures.OfType<T>().FirstOrDefault(f => f.name == name);
-            if (feature != null) return feature;
-            feature = ScriptableObject.CreateInstance<T>();
-            feature.name = name;
-            AssetDatabase.AddObjectToAsset(feature, renderer);
-            AssetDatabase.TryGetGUIDAndLocalFileIdentifier(feature, out string _, out long localId);
-            // The renderer keeps a list of its features and a parallel list of their file ids.
-            var serialized = new SerializedObject(renderer);
-            var features = serialized.FindProperty("m_RendererFeatures");
-            var map = serialized.FindProperty("m_RendererFeatureMap");
-            features.arraySize++;
-            features.GetArrayElementAtIndex(features.arraySize - 1).objectReferenceValue = feature;
-            map.arraySize++;
-            map.GetArrayElementAtIndex(map.arraySize - 1).longValue = localId;
-            serialized.ApplyModifiedPropertiesWithoutUndo();
-            return feature;
         }
 
         /// <summary>The index of a named layer, added in the first free user slot if missing.</summary>

@@ -5,7 +5,7 @@
 No attribution is required for these; they are listed with thanks. Fetched by `tools/fetch_assets.py` (outside this repository); the list with sizes is in `progress/art-fetched.md`.
 
 **Poly Haven** (https://polyhaven.com), models and textures, CC0:
-mounted_fluorescent_lights, caged_hanging_light, industrial_caged_sconce, modular_industrial_pipes_01, modular_electric_cables, modular_airduct_circular_01, metal_office_desk, Television_01, steel_frame_shelves_03, old_military_crate, metal_tool_chest, medical_box, Barrel_01, power_box_01, utility_box_01, security_camera_02, old_gas_mask, vintage_spacecraft_instrument, korean_fire_extinguisher_01; textures rusty_metal_03, metal_plate_02. Each asset's page is `https://polyhaven.com/a/<name>`.
+mounted_fluorescent_lights, industrial_caged_sconce, modular_industrial_pipes_01, modular_electric_cables, modular_airduct_circular_01, metal_office_desk, Television_01, steel_frame_shelves_03, old_military_crate, metal_tool_chest, medical_box, Barrel_01, power_box_01, utility_box_01, security_camera_02, old_gas_mask, korean_fire_extinguisher_01; textures rusty_metal_03, metal_plate_02. Each asset's page is `https://polyhaven.com/a/<name>`.
 
 **ambientCG** (https://ambientcg.com), textures, CC0: Concrete031, DiamondPlate008C, PaintedMetal006, Metal027. Each asset's page is `https://ambientcg.com/a/<name>`.
 
@@ -25,11 +25,9 @@ The rest of the town, each licensed under Creative Commons Attribution 4.0 (http
 - **"Low Poly: Dead Tree"** by **ClintonAbbott.Art**, https://sketchfab.com/3d-models/addc2aef9e534a93a8798320fea440ef, and **"Dead Tree"** by **MaX3Dd**, https://sketchfab.com/3d-models/33ccce6111604656a4b5709483670ec3: the dead trees.
 - **"BROKEN BRIDGE"** by **drcrazzie**, https://sketchfab.com/3d-models/95309d482f9949c0b87d4f0801f4a70f: the old bridge over the chasm (its middle cut away by the game's editor code).
 
-**"Male Hooded Character - IDLE [MESHY]"** by **Ethan Cox**, https://sketchfab.com/3d-models/324bb454193f41e9b46e286a06a5a5f9, licensed under Creative Commons Attribution 4.0 (https://creativecommons.org/licenses/by/4.0/). The survivor's earlier look (no longer used in the scene).
-
 ## Signs and clues
 
-The vault's stencilled signs are painted by `tools/make_signs.py` with Windows' Stencil and Bahnschrift fonts. The clues (the protocols poster, the status screen, Mara's note and last words, the scratched messages, Spark's tally) are painted by `tools/make_clues.py` with Windows' Ink Free, Bahnschrift, Consolas and Comic Sans. Ima's crayon drawing was drawn by Meta's Muse Image and signed in `tools/make_clues.py`.
+The vault's stencilled signs are painted by `tools/make_signs.py` with Windows' Stencil and Bahnschrift fonts. The clues (the protocols poster, the status screen, Mara's note and last words, the scratched messages, Spark's tally) are painted by `tools/make_clues.py` with Windows' Ink Free, Bahnschrift, Consolas and Comic Sans. Ima's crayon drawing was drawn by Meta's Muse Image and signed in `tools/make_clues.py`. The town's road signs and its poster of the sun mirror (`tools/make_town_signs.py`) and the pods' status screens (`tools/make_pod_screens.py`) are painted the same way. These tools live in the project folder outside this repository.
 
 ## Sound and voice
 
