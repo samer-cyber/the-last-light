@@ -13,6 +13,8 @@ mounted_fluorescent_lights, caged_hanging_light, industrial_caged_sconce, modula
 
 **"Stasis / Clone Chamber (with animations)"** by **TampaJoey**, https://sketchfab.com/3d-models/8738f78ae4ec4630ac35a4783303ea95, licensed under Creative Commons Attribution 4.0 (https://creativecommons.org/licenses/by/4.0/). Used for the sleepers' pods in the vault; its glass and light materials are recoloured and the sleepers are posed from one frame of its animation.
 
+**"Male Hooded Character - IDLE [MESHY]"** by **Ethan Cox**, https://sketchfab.com/3d-models/324bb454193f41e9b46e286a06a5a5f9, licensed under Creative Commons Attribution 4.0 (https://creativecommons.org/licenses/by/4.0/). The survivor. Its animation clip was removed (`tools/blender/strip_animations.py`, outside this repository); the game moves its skeleton itself.
+
 ## Signs
 
 The vault's stencilled signs are painted by `tools/make_signs.py` with Windows' Stencil and Bahnschrift fonts.

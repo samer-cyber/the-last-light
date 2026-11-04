@@ -253,6 +253,8 @@ namespace Game.Building
                 ("head", figure.Head), ("cloak", figure.Cloak), ("lookAt", drone.transform));
             SetSide(body, "left", figure.Left);
             SetSide(body, "right", figure.Right);
+            // The survivor's look: a rigged model whose skeleton follows the figure's joints.
+            Dress(figure, hand, travellerLayer, "HoodedMan", 1.78f);
 
             var say = interfaceObject.AddComponent<SayLine>();
             Wire(say, ("document", document), ("style", sayStyle), ("traveller", traveller), ("follow", follow), ("sound", typeSound));

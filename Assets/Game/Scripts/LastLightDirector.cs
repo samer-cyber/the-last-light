@@ -378,6 +378,7 @@ namespace Game
             lines = Mathf.Max(lines, 1);
             quietSince = Time.time;
             follow.EndShot();
+            ShowSurvivor(true);
             drone.Release();
             if (podLid) podLid.localRotation *= Quaternion.Euler(0f, -115f, 0f);
             if (vaultDoor && !doorOpen) vaultDoor.localRotation *= Quaternion.Euler(0f, DoorSwing, 0f);
@@ -422,6 +423,8 @@ namespace Game
             Vector3 stand = traveller.transform.position;
             Vector3 facing = Flat(traveller.Facing).normalized;
             Vector3 eyes = stand + Vector3.up * 1.62f;
+            // Their own eyes: their head is not drawn while the camera is inside it.
+            ShowSurvivor(false);
             follow.Shot(eyes - facing * 0.05f, eyes + facing * 4f + Vector3.down * 0.2f, 60f);
             drone.GoTo = stand + facing * 1.6f + Vector3.up * 1.45f + Vector3.Cross(Vector3.up, facing) * 0.3f;
             drone.LookAt = eyes;
@@ -465,6 +468,7 @@ namespace Game
             yield return Speak("There you are. Don't move too fast. Your blood's been cold for a very long time.", "WORRIED");
             // Back to the shoulder: they step out of the pod.
             follow.EndShot();
+            ShowSurvivor(true);
             follow.Face(Mathf.Atan2(facing.x, facing.z) * Mathf.Rad2Deg, 8f);
             follow.Scripted = false;
             drone.Release();
@@ -605,6 +609,11 @@ namespace Game
             hud.White = 0f;
             hud.Frost(0f);
             traveller.Scripted = false;
+        }
+
+        void ShowSurvivor(bool shown)
+        {
+            if (body) foreach (var r in body.GetComponentsInChildren<Renderer>(true)) r.enabled = shown;
         }
 
         /// <summary>How far the blast door turns on its hinge to open: inward, till it lies against the passage wall.</summary>
@@ -882,8 +891,12 @@ namespace Game
             byte[] view = null;
             if (step.verb == "SHOW_HERE")
             {
-                // The survivor's view as it is, without the screen's words, and held still while it is shown.
+                // The survivor's view as it is, without the screen's words and without the two of them (the
+                // place is redrawn, not them), and held still while it is shown.
+                var drawn = body.GetComponentsInChildren<Renderer>().Concat(drone.GetComponentsInChildren<Renderer>()).Where(r => r.enabled).ToList();
+                foreach (var r in drawn) r.enabled = false;
                 view = follow.Capture(1536, 864);
+                foreach (var r in drawn) r.enabled = true;
                 follow.Scripted = true;
             }
             string failed = null;

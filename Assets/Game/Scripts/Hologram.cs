@@ -96,8 +96,7 @@ namespace Game
             }
             if (sound && onClip) sound.PlayOneShot(onClip, 0.6f);
             done(null);
-            if (view != null) yield return Overlay(hud);
-            else yield return Project(drone, survivor, viewer);
+            yield return Project(drone, survivor, viewer, view != null);
             Busy = false;
         }
 
@@ -116,20 +115,34 @@ namespace Game
             }
         }
 
-        /// <summary>The picture floating in front of the survivor, at eye height, projected from the drone.</summary>
-        IEnumerator Project(Drone drone, Transform survivor, Transform viewer)
+        static readonly int ColourId = Shader.PropertyToID("_Colour");
+        static readonly int IntensityId = Shader.PropertyToID("_Intensity");
+
+        /// <summary>
+        /// The picture floating in front of the survivor, projected from the drone's eye. A view of this
+        /// place as it was (<paramref name="before"/>) is a wide window that keeps its own colours, and for a
+        /// moment it glides out to lie exactly over the real view it was drawn from, then floats back.
+        /// </summary>
+        IEnumerator Project(Drone drone, Transform survivor, Transform viewer, bool before)
         {
             Showing = true;
             Vector3 forward = Vector3.ProjectOnPlane(viewer.forward, Vector3.up).normalized;
-            Vector3 centre = survivor.position + forward * 4.6f + Vector3.up * 1.9f;
-            float size = 3.2f;
+            Vector3 centre = survivor.position + forward * (before ? 5.2f : 4.6f) + Vector3.up * (before ? 2.2f : 1.9f);
+            float size = before ? 5.2f : 3.2f;
+            float aspect = picture.height / Mathf.Max(1f, (float)picture.width);
+            var floating = Quaternion.LookRotation(forward, Vector3.up);
             panel.transform.position = centre;
-            panel.transform.rotation = Quaternion.LookRotation(forward, Vector3.up);
-            panel.transform.localScale = new Vector3(size, size * picture.height / Mathf.Max(1f, picture.width), 1f);
+            panel.transform.rotation = floating;
+            panel.transform.localScale = new Vector3(size, size * aspect, 1f);
             panelMaterial.SetTexture(MainTexId, picture);
+            panelMaterial.SetFloat(ColourId, before ? 0.82f : 0.35f);
+            panelMaterial.SetFloat(IntensityId, before ? 1.25f : 1.6f);
             panel.enabled = true;
             foreach (var ray in rays) ray.enabled = true;
-            stopAt = Time.time + hold;
+            float length = before ? hold * 1.15f : hold;
+            stopAt = Time.time + length;
+            float began = Time.time;
+            var camera = viewer.GetComponent<Camera>();
             // Just ahead of the survivor's shoulder, so the light fans out from it toward the picture.
             drone.GoTo = survivor.position + forward * 1.1f + Vector3.Cross(Vector3.up, forward) * 0.9f + Vector3.up * 1.8f;
             drone.LookAt = centre;
@@ -139,10 +152,25 @@ namespace Game
                 float gone = Mathf.Clamp01((Time.time - stopAt) / 0.9f);
                 panelMaterial.SetFloat(RevealId, appear * (1f - gone));
                 panelMaterial.SetFloat(FlickerId, Mathf.Max(1f - appear, gone, Mathf.PerlinNoise(t * 3f, 0f) > 0.82f ? 0.6f : 0f));
+                // The view as it was, lined up over the view as it is: out from floating, held, and back.
+                Vector3 at = centre + Vector3.up * Mathf.Sin(t * 1.3f) * 0.05f;
+                var turn = floating;
+                var scale = new Vector3(size, size * aspect, 1f);
+                if (before && camera)
+                {
+                    float k = Time.time - began, lined = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((k - 4.2f) / 1.6f)) * (1f - Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((k - 7.6f) / 1.6f)));
+                    float distance = 7.5f;
+                    float high = 2f * distance * Mathf.Tan(camera.fieldOfView * 0.5f * Mathf.Deg2Rad);
+                    at = Vector3.Lerp(at, viewer.position + viewer.forward * distance, lined);
+                    turn = Quaternion.Slerp(floating, viewer.rotation, lined);
+                    scale = Vector3.Lerp(scale, new Vector3(high * camera.aspect, high, 1f), lined);
+                }
+                panel.transform.SetPositionAndRotation(at, turn);
+                panel.transform.localScale = scale;
                 Vector3 eye = drone.Eye ? drone.Eye.transform.position : drone.transform.position;
                 var extent = panel.transform.localScale * 0.5f;
                 Vector3 right = panel.transform.right * extent.x, up = panel.transform.up * extent.y;
-                Vector3[] corners = { centre - right - up, centre + right - up, centre + right + up, centre - right + up };
+                Vector3[] corners = { at - right - up, at + right - up, at + right + up, at - right + up };
                 for (int i = 0; i < 4; i++)
                 {
                     rays[i].SetPosition(0, eye);
@@ -160,22 +188,5 @@ namespace Game
             Showing = false;
         }
 
-        /// <summary>The redrawn view laid over the world, flickering in and out.</summary>
-        IEnumerator Overlay(Hud hud)
-        {
-            Showing = true;
-            stopAt = Time.time + hold * 0.75f;
-            hud.Hologram(picture, 0f);
-            for (float t = 0f; Time.time < stopAt + 1.2f; t += Time.deltaTime)
-            {
-                float appear = Mathf.Clamp01(t / 1.6f);
-                float gone = Mathf.Clamp01((Time.time - stopAt) / 1.2f);
-                float flicker = appear < 1f || gone > 0f ? (Mathf.PerlinNoise(t * 18f, 1f) > 0.45f ? 1f : 0.55f) : 1f;
-                hud.Hologram(picture, Mathf.SmoothStep(0f, 1f, appear) * (1f - gone) * flicker);
-                yield return null;
-            }
-            hud.Hologram(null, 0f);
-            Showing = false;
-        }
     }
 }
