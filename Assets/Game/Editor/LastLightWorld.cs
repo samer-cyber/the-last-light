@@ -99,21 +99,24 @@ namespace Game.Building
                     vertices[j * nx + i] = new Vector3(x, Height(x, z), z);
                     colours[j * nx + i] = new Color(LakeAmount(x, z) > 0.3f ? 1f : 0f, 0f, 0f, 1f);
                 }
-            var triangles = new int[(nx - 1) * (nz - 1) * 6];
-            int t = 0;
+            var triangles = new List<int>((nx - 1) * (nz - 1) * 6);
             for (int j = 0; j < nz - 1; j++)
                 for (int i = 0; i < nx - 1; i++)
                 {
+                    // No ground in the vault's passage: the hill's slope would cut through it (the hill is hidden in the
+                    // portal's concrete everywhere else, and the passage has its own floor).
+                    float cx = (xs[i] + xs[i + 1]) * 0.5f, cz = (zs[j] + zs[j + 1]) * 0.5f;
+                    if (Mathf.Abs(cx) < 1.4f && cz < VaultDoorZ - 0.2f && cz > VaultDoorZ - 5.3f) continue;
                     int a = j * nx + i, b = a + 1, c = a + nx, d = c + 1;
-                    triangles[t++] = a; triangles[t++] = c; triangles[t++] = b;
-                    triangles[t++] = b; triangles[t++] = c; triangles[t++] = d;
+                    triangles.Add(a); triangles.Add(c); triangles.Add(b);
+                    triangles.Add(b); triangles.Add(c); triangles.Add(d);
                 }
             return SaveMesh("Frozen Ground", mesh =>
             {
                 mesh.indexFormat = IndexFormat.UInt32;
                 mesh.vertices = vertices;
                 mesh.colors = colours;
-                mesh.triangles = triangles;
+                mesh.SetTriangles(triangles, 0);
                 mesh.RecalculateNormals();
                 mesh.RecalculateBounds();
             });

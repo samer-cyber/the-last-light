@@ -14,7 +14,7 @@ namespace Game
         [SerializeField] StyleSheet style;
 
         VisualElement layer, hint, white, subtitle, black, listen, listenLevel, aim, aimDot, voice, photo, photoImage, goal;
-        VisualElement hologram, scanLines, honour, trust, logPanel, logEntries;
+        VisualElement hologram, scanLines, honour, trust, logPanel, logEntries, protocols, protocolRows;
         VisualElement[] trustPips;
         Label title, card, listenWords, said, note, aimWords, aimAction, carry, voiceName, voiceWords, photoCaption, goalTitle, goalStep;
         Label honourTitle, honourLine, trustWords, health;
@@ -267,6 +267,21 @@ namespace Game
             health.EnableInClassList("hud__warmth--low", value < 0.35f);
         }
 
+        /// <summary>Spark's protocols, top left under its trust: those it broke struck through and lit.</summary>
+        public void Protocols(System.Collections.Generic.IEnumerable<(string text, bool broken)> rules, bool open)
+        {
+            Build();
+            protocols.EnableInClassList("hud__protocols--shown", open);
+            protocolRows.Clear();
+            foreach (var (text, broken) in rules)
+            {
+                var row = new Label(broken ? "<s>" + text + "</s>   BROKEN" : text) { pickingMode = PickingMode.Ignore, enableRichText = true };
+                row.AddToClassList("hud__protocol");
+                if (broken) row.AddToClassList("hud__protocol--broken");
+                protocolRows.Add(row);
+            }
+        }
+
         /// <summary>Spark's log, open on the right, or closed.</summary>
         public void Log(System.Collections.Generic.IEnumerable<(string when, string entry)> entries, bool open)
         {
@@ -388,6 +403,12 @@ namespace Game
             honourLine = new Label { pickingMode = PickingMode.Ignore };
             honourLine.AddToClassList("hud__honour-line");
             honour.Add(honourLine);
+            protocols = Element("hud__protocols");
+            var protocolHead = new Label("SPARK'S PROTOCOLS   [P]") { pickingMode = PickingMode.Ignore };
+            protocolHead.AddToClassList("hud__protocols-head");
+            protocols.Add(protocolHead);
+            protocolRows = Part("hud__protocols-rows");
+            protocols.Add(protocolRows);
             logPanel = Element("hud__log");
             var logHead = new Label("SPARK'S LOG") { pickingMode = PickingMode.Ignore };
             logHead.AddToClassList("hud__log-head");

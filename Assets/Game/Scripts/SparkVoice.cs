@@ -10,9 +10,9 @@ using UnityEngine.Networking;
 namespace Game
 {
     /// <summary>
-    /// Spark's spoken voice: each line read aloud by ElevenLabs (Samer's designed voice "Game robot voice",
-    /// a robotic, conversational cyborg, a little joyful and silly), its steadiness and pace set by the
-    /// mood. Lines are kept in memory and on disk, so a line said before (the story's own lines, warnings)
+    /// Spark's spoken voice: each line read aloud by ElevenLabs v4 Turbo (Samer's designed voice "Game robot
+    /// voice", a robotic, conversational cyborg, a little joyful and silly), the line's mood given to the model
+    /// as an audio tag ([sad], [happy], [scared] ...) so the feeling follows the words, at a steady setting. Lines are kept in memory and on disk, so a line said before (the story's own lines, warnings)
     /// plays at once. Without a key or a connection the caller falls back to chirps. The key comes from
     /// <see cref="Secrets"/>; it is never logged.
     /// </summary>
@@ -20,7 +20,7 @@ namespace Game
     {
         const string KeyName = "ELEVENLABS_API_KEY";
         const string Voice = "1AVDZUKrjr2dXegY7zF8";
-        const string Model = "eleven_turbo_v2_5";
+        const string Model = "eleven_v4_turbo";
         public const int Rate = 24000;
 
         static readonly Dictionary<string, AudioClip> kept = new Dictionary<string, AudioClip>();
@@ -109,18 +109,23 @@ namespace Game
         static IEnumerator Ask(string line, string mood, float timeout, Action<byte[], string> done)
         {
             string key = Secrets.Get(KeyName);
-            // Calm lines steady and even; frightened, angry or glad ones looser and quicker; sad ones slower.
-            (float stability, float style, float speed) = mood switch
+            // The feeling as a direction the model performs, not loose settings that swing at random.
+            string tag = mood switch
             {
-                "SCARED" => (0.3f, 0.45f, 1.1f),
-                "ANGRY" => (0.3f, 0.5f, 1.05f),
-                "HAPPY" or "PLAYFUL" => (0.35f, 0.4f, 1.05f),
-                "SAD" or "HURT" => (0.5f, 0.3f, 0.92f),
-                "WORRIED" => (0.4f, 0.35f, 1.04f),
-                _ => (0.5f, 0.25f, 1f),
+                "SAD" => "[sad] ",
+                "HURT" => "[hurt] ",
+                "HAPPY" => "[happy] ",
+                "PLAYFUL" => "[playfully] ",
+                "CURIOUS" => "[curious] ",
+                "SCARED" => "[scared] ",
+                "WORRIED" => "[nervous] ",
+                "ANGRY" => "[frustrated] ",
+                "SORRY" => "[apologetic] ",
+                "SURE" => "[confident] ",
+                _ => "",
             };
-            string body = "{\"text\":" + MetaApi.Quote(line) + ",\"model_id\":\"" + Model + "\",\"voice_settings\":{" +
-                          $"\"stability\":{F(stability)},\"similarity_boost\":0.8,\"style\":{F(style)},\"use_speaker_boost\":true,\"speed\":{F(speed)}" + "}}";
+            string body = "{\"text\":" + MetaApi.Quote(tag + line) + ",\"model_id\":\"" + Model + "\",\"voice_settings\":{" +
+                          "\"stability\":0.5,\"similarity_boost\":0.8,\"use_speaker_boost\":true" + "}}";
             using var request = new UnityWebRequest($"https://api.elevenlabs.io/v1/text-to-speech/{Voice}?output_format=pcm_{Rate}", "POST")
             {
                 uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body)),

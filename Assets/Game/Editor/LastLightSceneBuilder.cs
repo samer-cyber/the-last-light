@@ -254,7 +254,7 @@ namespace Game.Building
             SetSide(body, "left", figure.Left);
             SetSide(body, "right", figure.Right);
             // The survivor's look: a rigged model whose skeleton follows the figure's joints.
-            Dress(figure, hand, travellerLayer, "HoodedMan", 1.78f);
+            Dress(figure, hand, travellerLayer, "CryoMan", 1.78f);
 
             var say = interfaceObject.AddComponent<SayLine>();
             Wire(say, ("document", document), ("style", sayStyle), ("traveller", traveller), ("follow", follow), ("sound", typeSound));
@@ -951,7 +951,7 @@ namespace Game.Building
             message.transform.localScale = new Vector3(3.6f, 2.25f, 1f);
             message.shadowCastingMode = ShadowCastingMode.Off;
             landmarks.Add(MakeLandmark("Writing Place", message.transform, message.transform.position, "MESSAGE", "the writing on the wall",
-                "words scratched into the station's inner north wall, too small to read from the door", new Vector3(3.6f, 2.2f, 0.3f)));
+                "Mara Okonjo's last words, scratched into the station's inner north wall in her hand, too small to read from the door. She came here for the heart in year 98 and never came home", new Vector3(3.6f, 2.2f, 0.3f)));
 
             // The heart: a barrel of dark metal banded with light, frozen in a block of ice.
             var heartObject = new GameObject("Heart");

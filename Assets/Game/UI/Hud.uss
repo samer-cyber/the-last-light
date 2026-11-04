@@ -588,3 +588,44 @@
     bottom: 0;
     -unity-background-scale-mode: stretch-to-fill;
 }
+
+/* Spark's protocols: top left, under its trust. The ones it broke are struck through and lit. */
+
+.hud__protocols {
+    position: absolute;
+    left: 40px;
+    top: 132px;
+    padding: 10px 16px 10px 14px;
+    background-color: rgba(8, 9, 12, 0.62);
+    border-left-width: 2px;
+    border-color: rgba(160, 200, 255, 0.55);
+    opacity: 0;
+    translate: -14px 0;
+    transition-property: opacity, translate;
+    transition-duration: 0.6s, 0.6s;
+}
+
+.hud__protocols--shown {
+    opacity: 1;
+    translate: 0 0;
+}
+
+.hud__protocols-head {
+    font-size: 14px;
+    letter-spacing: 5px;
+    color: rgba(180, 210, 255, 0.85);
+    margin-bottom: 6px;
+}
+
+.hud__protocol {
+    font-size: 18px;
+    letter-spacing: 1px;
+    color: rgba(232, 238, 248, 0.88);
+    text-shadow: 0 1px 6px rgba(0, 0, 0, 0.9);
+    margin-bottom: 3px;
+}
+
+.hud__protocol--broken {
+    color: rgb(255, 186, 110);
+    text-shadow: 0 0 10px rgba(255, 140, 50, 0.65);
+}

@@ -98,6 +98,9 @@ namespace Game
         {
             if (awake) return;
             awake = true;
+            // Time to see it, hear Spark, and think: it stalks before its first sweep, and calls its pack later still.
+            nextAttack = Time.time + 14f;
+            nextPack = Time.time + 40f;
             Woke?.Invoke();
         }
 
@@ -106,7 +109,8 @@ namespace Game
             if (Broken || !target) return;
             float dt = Time.deltaTime;
             float d = Vector3.Distance(Flat(target.position), Flat(transform.position));
-            if (!awake && d < 38f) StartCoroutine(Scan());
+            // It wakes only when they come near (not from inside the station): then it looks them over before anything else.
+            if (!awake && d < 24f) StartCoroutine(Scan());
             // It closes slowly, keeping some distance, and turns to face its prey.
             Vector3 to = Flat(target.position - transform.position);
             if (awake && !sweeping && !charging && !Stunned)

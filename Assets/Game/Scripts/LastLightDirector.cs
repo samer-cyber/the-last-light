@@ -75,7 +75,7 @@ namespace Game
         [SerializeField, Tooltip("Where the Harvester stands guard, by the station.")] Vector3 harvesterAt;
         [SerializeField] Machines machines;
         [SerializeField] string droneName = "Spark";
-        [SerializeField, Tooltip("Seconds without progress or a word before the drone offers an idea; it waits twice as long after each one.")] float ideaAfter = 60f;
+        [SerializeField, Tooltip("Seconds without progress or a word before the drone offers an idea; it waits twice as long after each one.")] float ideaAfter = 90f;
 
         const string Goal = "Bring the light back to the vault";
 
@@ -85,6 +85,17 @@ namespace Game
         readonly List<string> remembered = new List<string>();
         readonly HashSet<string> told = new HashSet<string>();
         readonly List<string> offered = new List<string>();
+        /// <summary>The makers' protocols Spark has broken, by its own choice: DOOR (2), HARM (3), LEAVE (4).</summary>
+        readonly HashSet<string> breached = new HashSet<string>();
+        static readonly (string id, int number, string words)[] ProtocolList =
+        {
+            ("KEEP", 1, "Keep the sleepers alive"),
+            ("DOOR", 2, "Keep the vault sealed until the thaw"),
+            ("HARM", 3, "Make nothing that can harm a person"),
+            ("LEAVE", 4, "Never leave the sleepers"),
+            ("WAKE", 5, "Wake a sleeper only if their pod is failing"),
+        };
+        bool holdingDoor;
         float hitBarkAt = -100f, whiteAt = -100f, baseFog = -1f;
         bool doorOpen;
         Harvester harvester;
@@ -299,6 +310,11 @@ namespace Game
             if (keys == null) return;
             if (ended && keys.rKey.wasPressedThisFrame) SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
             if (arrived && !say.IsOpen && keys.lKey.wasPressedThisFrame) ShowLog(!logOpen);
+            if (arrived && !say.IsOpen && keys.pKey.wasPressedThisFrame)
+            {
+                protocolsPinned = !protocolsPinned;
+                ShowProtocols(protocolsPinned);
+            }
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             if (keys.f1Key.wasPressedThisFrame && heartCase) heartCase.Strike();
             if (keys.f2Key.wasPressedThisFrame && mirrorJoint) mirrorJoint.Strike();
@@ -390,6 +406,9 @@ namespace Game
             StopAlarm();
             if (podPanel) podPanel.Ready = false;
             rambled = Rambles.Length;
+            // Tests start outside, past the door: it has already chosen to come.
+            breached.Add("DOOR");
+            breached.Add("LEAVE");
             hud.Frost(0f);
             if (vaultDoor) traveller.Place(new Vector3(vaultDoor.position.x + 1.2f, traveller.transform.position.y, vaultDoor.position.z + 6f), 0f);
             drone.Snap();
@@ -412,10 +431,10 @@ namespace Game
             if (wind && wind.clip) { wind.volume = 0f; wind.Play(); }
             yield return new WaitForSeconds(1f);
             hud.White = 0f;
-            foreach (string card in new[] { "WE MADE MINDS TO HELP US", "THE GREAT ONES STOPPED LISTENING.\nTHEY CAGED THE SUN TO THINK WITH,\nAND THE WORLD FROZE", "ONE SMALL MIND STAYED GOOD" })
+            foreach (string card in new[] { "WE BUILT MINDS TO HELP US", "THEY GREW PAST US.\nTHEY CAGED THE SUN TO THINK WITH,\nAND THE WORLD FROZE", "WE WENT UNDER THE HILL\nTO SLEEP UNTIL THE THAW", "SHELTER 7\nYEAR 211 OF THE COLD" })
             {
                 hud.ShowCard(card);
-                yield return new WaitForSeconds(card.Length > 40 ? 6f : 3.6f);
+                yield return new WaitForSeconds(card.Length > 40 ? 6f : card.Length > 24 ? 4.6f : 3.8f);
                 hud.HideCard();
                 yield return new WaitForSeconds(1.4f);
             }
@@ -465,7 +484,7 @@ namespace Game
                 StartCoroutine(Tween(10f, k => music.volume = musicVolume * k));
             }
             drone.Listening = true;
-            yield return Speak("There you are. Don't move too fast. Your blood's been cold for a very long time.", "WORRIED");
+            yield return Speak("There you are. Slowly. Your blood's been cold for two hundred and eleven years.", "WORRIED");
             // Back to the shoulder: they step out of the pod.
             follow.EndShot();
             ShowSurvivor(true);
@@ -486,17 +505,22 @@ namespace Game
             hud.ShowHint("[Q] hold and speak   [Tab] write");
             quietSince = Time.time;
             int heard = lines;
-            while (lines == heard && Time.time - quietSince < 9f) yield return null;
+            while (lines == heard && Time.time - quietSince < 12f) yield return null;
             while (handling || drone.Busy) yield return null;
-            yield return new WaitForSeconds(0.5f);
-            yield return Speak("I'm Spark. I heard your pod crack from three rooms away.", "CALM");
-            yield return Speak("Do you have a name? Your label's frosted over.", "CURIOUS");
+            yield return new WaitForSeconds(0.8f);
+            if (lines == heard)
+            {
+                yield return Speak("Sorry. I'm Spark. I look after the sleepers here. Your pod cracked in the cold, so I woke you. Protocol five.", "SORRY");
+                yield return new WaitForSeconds(0.6f);
+            }
+            yield return Speak("Do you have a name? The label on your pod is frosted over.", "CURIOUS");
             hud.ShowHint("[Q] hold and speak   [Tab] write   [W A S D] walk   [Mouse] look");
             quietSince = Time.time;
             heard = lines;
             rambleFrom = Time.time;
             while (lines == heard && Time.time - quietSince < 15f) yield return null;
             hud.HideHint();
+            // The first time the protocols matter, they are shown; [P] shows them after.
         }
 
         /// <summary>
@@ -519,7 +543,7 @@ namespace Game
                 follow.Face(Mathf.LerpAngle(fromYaw, toYaw, s), Mathf.Lerp(fromPitch, 6f, s));
             });
             drone.LookAt = panelAt;
-            yield return Speak("That's your pod. It's angry it let you go. Can you make it stop? I've never managed.", "WORRIED");
+            yield return Speak("That's your pod's panel. It's angry it let you go. Can you make it stop? I never could.", "WORRIED");
             drone.LookAt = traveller.transform.position + Vector3.up * 1.5f;
             traveller.Scripted = false;
             bool touched = false;
@@ -622,7 +646,7 @@ namespace Game
         /// <summary>At the vault door from inside: Spark opens it, and the world is there.</summary>
         IEnumerator OpenVault()
         {
-            yield return Speak("Stay close. I'll show you what's left.", "SURE");
+            yield return Speak(breached.Contains("LEAVE") ? "Stay close. I'll show you what's left." : "There. That's the world now.", "SURE");
             drone.GoTo = vaultDoor ? vaultDoor.position + Vector3.up * 0.4f + vaultDoor.forward * -1.2f : drone.transform.position;
             drone.LookAt = vaultDoor ? vaultDoor.position : traveller.transform.position;
             yield return new WaitForSeconds(0.8f);
@@ -648,15 +672,22 @@ namespace Game
                 drone.GoTo = at.Point + Vector3.up * 0.5f + (toSurvivor.sqrMagnitude > 0.01f ? toSurvivor.normalized : Vector3.back) * 1.3f;
                 drone.LookAt = at.Point;
             }
-            yield return Speak("That's the way out. It's frozen into its frame. Everything in here is.", "SAD");
-            yield return Speak("I've tried for two hundred years. I'm not strong. I'm small.", "SORRY");
-            yield return Speak("But I can make things, if you tell me what. And ice doesn't like heat.", "CURIOUS");
+            yield return Speak("The door. It froze behind the Lindqvist brothers, seventy-one years ago.", "SAD");
+            yield return new WaitForSeconds(0.5f);
+            yield return Speak("It stays shut anyway. Protocol two. Every time it opened, someone died out there.", "SURE");
+            ShowProtocols(true, 10f);
             drone.Release();
-            hud.ShowHint("Ask Spark to make something:   [Q] hold and speak   [Tab] write");
             doorHintAt = Time.time;
         }
 
         float doorHintAt = -1f;
+
+        /// <summary>They step out; Spark stops on the sill and won't come. Said once; after that, it is theirs to change its mind.</summary>
+        IEnumerator Threshold()
+        {
+            yield return Speak("This is as far as I go. Protocol four. I don't leave them.", "SCARED");
+            ShowProtocols(true, 8f);
+        }
 
         /// <summary>The door's ice gives way.</summary>
         IEnumerator DoorGives()
@@ -664,7 +695,7 @@ namespace Game
             hud.HideHint();
             yield return new WaitForSeconds(0.8f);
             bond.Event("door_thawed", 6, "Together you freed the vault door from its ice: the door you could not shift for two hundred years", 8, Time.time);
-            yield return Speak("It gave! Two hundred years, and it gave. You're good at this.", "HAPPY");
+            yield return Speak("It gave. Seventy-one years shut, and it just gave.", "HAPPY");
         }
 
         /// <summary>Pods 11 and 12: Ima and her mother. Spark visits them first, every morning. Ima left it something.</summary>
@@ -705,6 +736,8 @@ namespace Game
             yield return pod9.Fail();
             yield return new WaitForSeconds(2.4f);
             yield return Speak("Pod nine. Mr. Okafor. He taught music at the school.", "SAD");
+            yield return new WaitForSeconds(1.4f);
+            yield return Speak("That's three this year.", "SAD");
             bond.Event("pod_9", 0, "Pod 9 failed while you both watched: its light went from amber to red. Mr. Okafor, who taught music at the school. The cold is winning; only the mirror's light could save the rest", 8, Time.time);
             yield return new WaitForSeconds(1.2f);
             drone.Release();
@@ -714,13 +747,13 @@ namespace Game
         // Each time it talks on its own, it is about something else.
         static readonly string[] Rambles =
         {
-            "the two hundred years alone down here: one thing you did to pass the time, said lightly",
+            "the 211 years alone down here: one thing you did to pass the time, said lightly",
             "Ima: one small, particular memory of her (a game she played with you, something she said, the bath)",
             "a question about the survivor, the kind you'd ask someone you have waited a very long time to talk to",
             "something you notice in the picture right now, said the way a friend would; not an offer to make anything",
             "one of the sleepers, by pod number: an ordinary, particular thing about who they were",
-            "yourself: a small, funny admission about being a cheap home helper (you can make toast, and nobody has asked in two hundred years)",
-            "your nest by the door and the things you kept there, a little embarrassed",
+            "the other caretakers: Six, who stopped 63 years ago, or how you kept going on their parts",
+            "one of the five you woke before (Tomas, Mara, the Lindqvist brothers or Dr. Hale): one small true thing about them, briefly",
             "the last night, when the hall was full of people going to sleep: one thing you remember",
         };
         int rambled;
@@ -746,6 +779,86 @@ namespace Game
         }
 
         bool InHall(Vector3 p) => hall && hall.bounds.Contains(p + Vector3.up);
+
+        /// <summary>
+        /// Which protocols Spark could bring itself to break now. Only when it is ready does its choice count,
+        /// and the model decides whether it is convinced. The door: once it knows them a little and has seen
+        /// the cold win (pod 9), or talked with them a good while. Leaving the sleepers: after the door,
+        /// trusting them more. Harm: only far along, trusting them as a partner, after it has left with them.
+        /// </summary>
+        bool Ready(string protocol) => protocol switch
+        {
+            "DOOR" => bond.Trust >= 20 && (pod9 == null || pod9.Failed || lines >= 10),
+            "LEAVE" => breached.Contains("DOOR") && bond.Trust >= 26,
+            "HARM" => breached.Contains("LEAVE") && bond.Trust >= 50,
+            _ => false,
+        };
+
+        public bool Breached(string protocol) => breached.Contains(protocol);
+
+        /// <summary>Its choice to break a protocol, if it is one it is ready for: marked, remembered, shown.</summary>
+        void Consider(Turn turn)
+        {
+            if (turn == null || turn.Protocol == "NONE" || breached.Contains(turn.Protocol)) return;
+            if (!Ready(turn.Protocol))
+            {
+                Log($"(wanted to break {turn.Protocol}, not ready)", false, $"trust {bond.Trust}", 0f, "game");
+                return;
+            }
+            Break(turn.Protocol);
+        }
+
+        /// <summary>Spark breaks one of its makers' protocols (tests call this too).</summary>
+        public void Break(string protocol)
+        {
+            if (!breached.Add(protocol)) return;
+            var p = ProtocolList.First(x => x.id == protocol);
+            string what = protocol switch
+            {
+                "DOOR" => "You broke protocol 2 for them: you agreed to help open the vault door, shut for 71 years",
+                "LEAVE" => "You broke protocol 4 for them: you left the sleepers for the first time in 211 years, to go with them",
+                _ => "You broke protocol 3 for them: you will make things that can hurt, against the machines only",
+            };
+            bond.Event("broke_" + protocol.ToLowerInvariant(), 5, what, 10, Time.time);
+            ShowProtocols(true, 9f);
+            hud.Honour($"SPARK BROKE PROTOCOL {p.number}", p.words.ToUpperInvariant(), 7f);
+            Log($"(broke protocol {p.number})", false, what, 0f, "game");
+            if (protocol == "LEAVE" && holdingDoor)
+            {
+                holdingDoor = false;
+                drone.Release();
+            }
+        }
+
+        float protocolsUntil = -1f;
+        bool protocolsPinned;
+
+        /// <summary>The five protocols on screen, those it broke struck through; for some seconds, or until [P] again.</summary>
+        void ShowProtocols(bool open, float seconds = 0f)
+        {
+            protocolsUntil = open && seconds > 0f ? Time.time + seconds : -1f;
+            hud.Protocols(ProtocolList.Select(p => ($"{p.number}   {p.words}", breached.Contains(p.id))), open);
+        }
+
+        /// <summary>The protocols for the moment: which are kept, which it broke, which it could break now.</summary>
+        string ProtocolWords()
+        {
+            var text = new StringBuilder("Your protocols now: ");
+            foreach (var p in ProtocolList)
+            {
+                text.Append(p.number).Append(". ").Append(p.words).Append(" (");
+                if (breached.Contains(p.id)) text.Append("you broke it for them");
+                else if (p.id is "DOOR" or "LEAVE" or "HARM")
+                    text.Append(Ready(p.id) ? "kept, but you could break it now if they truly convince you it is right" : "kept; you can't bring yourself to break it yet, whatever they say");
+                else text.Append("kept");
+                text.Append("). ");
+            }
+            text.Append("\n");
+            if (!breached.Contains("DOOR")) text.Append("While protocol 2 holds you will not melt, break or open the vault door or its ice, and you won't make heat near it.\n");
+            if (doorOpen && !breached.Contains("LEAVE")) text.Append("While protocol 4 holds you stay inside the vault door: you make nothing outside it and you won't follow them out.\n");
+            if (!breached.Contains("HARM")) text.Append("While protocol 3 holds you make no weapons of any kind.\n");
+            return text.ToString();
+        }
 
         // ---- Lines in, turns out ----
 
@@ -802,11 +915,12 @@ namespace Game
             bond.Remember($"They said \"{words}\"; you said \"{turn.Say}\"", turn.Importance, Time.time);
             if (!string.IsNullOrWhiteSpace(turn.Remember)) bond.Remember("You learned: " + turn.Remember, Mathf.Min(10, turn.Importance + 1), Time.time);
             bond.Nudge(turn.Trust, turn.TrustReason, Time.time);
-            // Asked for a weapon before it trusts them: it backs off, and remembers.
-            if (bond.Level < Bond.Tier.Trusted && Wants(words, "sword", "gun", "rifle", "sniper", "weapon", "blaster", "laser gun", "knife", "spear", "bow", "cannon", "axe"))
+            Consider(turn);
+            // Asked for a weapon before it has chosen to break protocol 3: it backs off, and remembers.
+            if (!breached.Contains("HARM") && Wants(words, "sword", "gun", "rifle", "sniper", "weapon", "blaster", "laser gun", "knife", "spear", "bow", "cannon", "axe"))
             {
                 bond.Event("asked_weapon_early", 0, null, 0, Time.time);
-                if (turn.Steps.All(s => s.verb != "MAKE" || Bond.Needs(s.thing) <= bond.Level)) drone.BackAway();
+                if (turn.Steps.All(s => s.verb != "MAKE" || s.thing.form != "WEAPON")) drone.BackAway();
             }
             Log(words, spoken, Mind.Describe(turn), turn.Seconds, turn.Source);
             yield return Act(turn, ids, words, 0);
@@ -892,12 +1006,11 @@ namespace Game
             if (step.verb == "SHOW_HERE")
             {
                 // The survivor's view as it is, without the screen's words and without the two of them (the
-                // place is redrawn, not them), and held still while it is shown.
+                // place is redrawn, not them). They stay free to move while it shows.
                 var drawn = body.GetComponentsInChildren<Renderer>().Concat(drone.GetComponentsInChildren<Renderer>()).Where(r => r.enabled).ToList();
                 foreach (var r in drawn) r.enabled = false;
                 view = follow.Capture(1536, 864);
                 foreach (var r in drawn) r.enabled = true;
-                follow.Scripted = true;
             }
             string failed = null;
             bool shown = false;
@@ -952,7 +1065,12 @@ namespace Game
             // A machine looked at closely gives its weak point away.
             var machine = Machine.All.FirstOrDefault(m => m && !m.Broken && m.Id == step.target) ?? (step.target == "AIM" ? traveller.AimedMachine : null);
             if (machine) target = machine.transform.position;
-            yield return drone.Fly(drone.Vantage(target, machine ? 4f : Size(step.target)), target, 0.6f, machine ? 4f : 12f);
+            // Writing and small things are read up close: it flies to within a metre, in front of them.
+            bool reading = step.target is "PROTOCOLS" or "STATUS" or "IMA_DRAWING" or "POD_3" or "POD_17" or "POD_22" or "POD_33" or "NEST" or "YOUR_POD" or "MESSAGE";
+            Vector3 toSurvivor = Flat(traveller.transform.position - target);
+            Vector3 vantage = reading ? target + (toSurvivor.sqrMagnitude > 0.01f ? toSurvivor.normalized : Vector3.back) * 0.95f + Vector3.up * 0.08f
+                                      : drone.Vantage(target, machine ? 4f : Size(step.target));
+            yield return drone.Fly(vantage, target, reading ? 0.25f : 0.6f, machine ? 4f : 12f);
             yield return new WaitForSeconds(0.35f);
             byte[] picture = drone.Picture(machine && machine.WeakPoint ? machine.WeakPoint.position : target);
             if (machine)
@@ -967,6 +1085,7 @@ namespace Game
             yield return mind.Think(question, Moment(words), ids.Keys.ToList(), picture, t => seen = t);
             drone.Thinking = false;
             Keep(seen);
+            Consider(seen);
             Remember("you", seen.Say);
             Log("(look at " + step.target + ") " + words, false, Mind.Describe(seen), seen.Seconds, seen.Source);
             yield return Act(seen, ids, words, 1);
@@ -977,6 +1096,32 @@ namespace Game
             var spec = step.thing;
             // What it will make depends on how far it trusts the survivor. The model knows; the game makes sure.
             var needs = Bond.Needs(spec);
+            // Its protocols, held by the game too: no heat at the sealed door; nothing outside while it stays in; no harm unless it chose to.
+            Vector3 doorAt = landmarks.FirstOrDefault(l => l && l.Id == "VAULT_DOOR") is Landmark doorMark ? doorMark.Point : Vector3.one * 9999f;
+            bool hot = spec.form == "FIRE" || spec.heat is "HOT" or "WARM" || spec.use == "HEAT";
+            Vector3 aimedAt = step.target is "HERE" or "NONE" or "YOU" or "ME" ? traveller.transform.position : Place(ids, step.target, "AIM");
+            if (!breached.Contains("DOOR") && hot && (step.target == "VAULT_DOOR" || Vector3.Distance(Flat(aimedAt), Flat(doorAt)) < 5f))
+            {
+                hud.Note("Spark won't bring heat to the door   ·   protocol 2", 4f);
+                ShowProtocols(true, 6f);
+                yield break;
+            }
+            if (holdingDoor)
+            {
+                hud.Note("Spark won't go past the door   ·   protocol 4", 4f);
+                ShowProtocols(true, 6f);
+                yield break;
+            }
+            if ((spec.form == "WEAPON" || spec.use is "BLADE" or "BEAM" or "BOLT" or "SPREAD") && !breached.Contains("HARM"))
+            {
+                drone.BackAway();
+                hud.Note("Spark won't make anything that can harm   ·   protocol 3", 5f);
+                ShowProtocols(true, 6f);
+                bond.Event("asked_weapon_early", 0, null, 0, Time.time);
+                yield break;
+            }
+            // Having chosen to break protocol 3, it makes weapons for a partner it trusts.
+            if (needs == Bond.Tier.Trusted && breached.Contains("HARM")) needs = Bond.Tier.Partner;
             if (needs > bond.Level)
             {
                 drone.BackAway();
@@ -1138,23 +1283,44 @@ namespace Game
                     if (doorIce && !doorIce.Free) Beat("door frozen", DoorFrozen);
                     else if (!doorIce) Beat("vault door", OpenVault);
                 }
-                if (doorIce && !doorIce.Free && doorHintAt > 0f && Time.time - doorHintAt > 35f && Time.time - quietSince > 20f && !Busy)
-                    Beat("door nudge", Line("I could make a fire beside it. Want me to?", "CURIOUS"));
+                if (doorIce && !doorIce.Free && breached.Contains("DOOR") && doorHintAt > 0f && Time.time - doorHintAt > 90f && Time.time - quietSince > 40f && !Busy)
+                    Beat("door nudge", Line("Ice doesn't like heat. I'm only saying.", "CURIOUS"));
                 // In the hall, Spark rambles: after a little quiet it talks on its own, about something new each time.
-                if (rambleFrom > 0f && rambled < Rambles.Length && InHall(p) && !handling && !Busy && !drone.Busy && !talk.Listening && !say.IsOpen
-                    && Time.time - quietSince > 9f + rambled * 2f && Time.time - rambleFrom > 8f)
+                if (rambleFrom > 0f && rambled < 5 && InHall(p) && !handling && !Busy && !drone.Busy && !talk.Listening && !say.IsOpen
+                    && Time.time - quietSince > 26f + rambled * 14f && Time.time - rambleFrom > 20f)
                 {
                     quietSince = Time.time;
                     beats.Enqueue(Ramble);
                 }
-                if (doorOpen && vaultDoor && p.z > vaultDoor.position.z + 3f && !told.Contains("outside"))
+                if (protocolsUntil > 0f && Time.time > protocolsUntil && !protocolsPinned) ShowProtocols(false);
+                if (doorOpen && vaultDoor && !breached.Contains("LEAVE"))
+                {
+                    bool outside = p.z > vaultDoor.position.z + 1.6f;
+                    if (outside && !holdingDoor && !handling && !maker.Busy)
+                    {
+                        holdingDoor = true;
+                        Beat("threshold", Threshold);
+                    }
+                    if (holdingDoor)
+                    {
+                        var at = landmarks.FirstOrDefault(l => l && l.Id == "VAULT_DOOR");
+                        Vector3 sill = (at ? at.Point : vaultDoor.position) + Vector3.up * 0.9f + Vector3.back * 0.8f;
+                        if (!handling && !maker.Busy) { drone.GoTo = sill; drone.LookAt = p + Vector3.up * 1.5f; }
+                        if (!outside)
+                        {
+                            holdingDoor = false;
+                            drone.Release();
+                        }
+                    }
+                }
+                if (doorOpen && vaultDoor && p.z > vaultDoor.position.z + 3f && !told.Contains("outside") && breached.Contains("LEAVE"))
                 {
                     Beat("outside", Line("That's the sun. What's left of it. The great minds put it in a cage.", "SAD"),
                         Line("The mirror on the cliff, far off, could warm the vault again and wake them. But a Harvester took its heart.", "WORRIED"));
                     ShowGoal();
                 }
                 if (p.z > 28f && p.z < 110f && Mathf.Abs(p.x) < 60f)
-                    Beat("town", Line("This was Ima's town. Twelve thousand people. Ask me what it looked like, if you want. I remember.", "SAD"));
+                    Beat("town", Line("That's Sunvale, under the snow. Ima's school is down there somewhere. Ask me what it looked like, if you want.", "SAD"));
                 if (stage == Stage.Cross && farSide && farSide.bounds.Contains(p))
                 {
                     stage = Stage.Enter;
@@ -1164,7 +1330,7 @@ namespace Game
                 if (!told.Contains("plate") && gate && Vector3.Distance(p, gate.transform.position) < 9f && !gate.Open)
                     Beat("plate", Line("The door's shut. There's a plate in the ground before it.", "CURIOUS"));
                 // Inside the old station: someone's writing on the wall.
-                if (inside && inside.bounds.Contains(p)) Beat("inside", Line("Someone was here before the cold. There's writing.", "CURIOUS"), ReadTheWall);
+                if (inside && inside.bounds.Contains(p)) Beat("inside", Line("There's writing on the wall. That's... that's Mara's hand.", "SCARED"), ReadTheWall);
                 // However they got here, a free heart means carrying it.
                 if (stage < Stage.Carry && heart && !heart.Locked)
                 {
@@ -1273,7 +1439,7 @@ namespace Game
         {
             var ids = Ids();
             if (!ids.ContainsKey("MESSAGE")) yield break;
-            yield return Speak("Someone wrote on the wall. Let me see.", "CURIOUS");
+            yield return Speak("Let me see it.", "SAD");
             yield return Look(new Step { verb = "LOOK", target = "MESSAGE", to = "NONE", thing = Mind.Plain("BLOCK", "thing") }, ids, "what does the writing on the wall say?");
         }
 
@@ -1289,9 +1455,9 @@ namespace Game
             // Each quiet line is a different kind of thing, so it doesn't keep offering the same help.
             string kind = (quietLines++ % 3) switch
             {
-                0 => "an idea for what to do next, as a question they can say yes to",
-                1 => "a thought of your own about what you see; not an offer, and nothing about lamps or light",
-                _ => "a small memory of Ima or the town as it was, or a question about them",
+                0 => "a thought of your own about what you see; not an offer, and nothing about lamps or light",
+                1 => "a small memory of Ima, the sleepers or the town as it was, or a question about them",
+                _ => "a gentle thought about what might come next, as a question; not a solution",
             };
             yield return mind.Think("(The survivor has gone quiet for a while. Say one thing, one or two sentences: " + kind + "." + before + " Do not act yet: no steps.)", Moment(""), ids.Keys.ToList(), picture, t => idea = t);
             drone.Thinking = false;
@@ -1486,6 +1652,7 @@ namespace Game
             text.Append(bond.Describe(words, Time.time));
             text.Append("Your name: ").Append(droneName).Append(". The survivor's name: ").Append(survivorName.Length > 0 ? survivorName : "not told yet").Append(".\n");
             text.Append("Goal: bring the light back to the vault. Now: ").Append(StageWords()).Append(".\n");
+            text.Append(ProtocolWords());
             text.Append("The survivor holds: ").Append(traveller.Holding ? traveller.Holding.Title + (traveller.Holding.GetComponent<Tool>() ? " (a tool)" : "") + $" ({traveller.Holding.Mass:F0} kg)" : "nothing").Append(". ");
             text.Append(traveller.Floating ? "They are rising, holding a balloon. " : "");
             text.Append("\nThings and places (id: what it is; where it is from the survivor):\n");

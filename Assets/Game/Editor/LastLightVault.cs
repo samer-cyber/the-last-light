@@ -28,7 +28,7 @@ namespace Game.Building
 
         // How each sleeper's pod stands (script, part 1): thirty-one still green, three amber (Mr. Okafor's,
         // pod 9, among them), two red, three dark.
-        static readonly int[] Amber = { 9, 26, 35 }, Red = { 17, 33 }, Dark = { 4, 22, 30 };
+        static readonly int[] Amber = { 9, 26, 35 }, Red = { }, Dark = { 4, 30 }, Empty = { 3, 17, 22, 23, 33 };
 
         /// <summary>
         /// The vault, dug into its hill: a round door in a concrete face, and behind it the sleeping hall,
@@ -60,7 +60,7 @@ namespace Game.Building
             // Pod glass, frosted, and rime grown in from its edges, thickest at the bottom.
             var podGlass = MakeLit("Pod Glass Frosted", new Color(0.55f, 0.64f, 0.7f, 0.32f), 0.6f, 0f);
             Transparent(podGlass);
-            var rimeLook = MakeLit("Pod Rime", Color.white, 0.5f, 0f);
+            var rimeLook = MakeLit("Pod Rime", new Color(0.62f, 0.7f, 0.78f, 0.55f), 0.5f, 0f);
             rimeLook.SetTexture("_BaseMap", MakeTexture("Pod Rime", 256, true, Rime));
             Transparent(rimeLook);
             var green = Glow("Pod Light Green", new Color(0.25f, 1f, 0.45f), 2.2f);
@@ -85,6 +85,24 @@ namespace Game.Building
                 var look = MakeLit("Sign " + sign, Color.white, 0.15f, 0f);
                 look.SetTexture("_BaseMap", Load<Texture2D>($"{Root}/Textures/Signs/{sign}.png"));
                 Transparent(look);
+                var plate = Box(name, under, look, at, new Vector3(size.x, size.y, 0.004f), false);
+                plate.transform.localRotation = turn;
+                plate.shadowCastingMode = ShadowCastingMode.Off;
+                return plate;
+            }
+            Renderer Clue(string name, Transform under, string file, Vector3 at, Vector2 size, Quaternion turn, float glow = 0f, bool clear = false)
+            {
+                var look = MakeLit("Clue " + file, Color.white, 0.2f, 0f);
+                var picture = Load<Texture2D>($"{Root}/Textures/Clues/{file}.png");
+                look.SetTexture("_BaseMap", picture);
+                if (clear) Transparent(look);
+                if (glow > 0f)
+                {
+                    look.EnableKeyword("_EMISSION");
+                    look.SetTexture("_EmissionMap", picture);
+                    look.SetColor("_EmissionColor", Color.white * glow);
+                    look.globalIlluminationFlags = MaterialGlobalIlluminationFlags.None;
+                }
                 var plate = Box(name, under, look, at, new Vector3(size.x, size.y, 0.004f), false);
                 plate.transform.localRotation = turn;
                 plate.shadowCastingMode = ShadowCastingMode.Off;
@@ -198,7 +216,7 @@ namespace Game.Building
             SetValue(frozenDoor, "blows", 5);
             parts.DoorIce = frozenDoor;
             landmarks.Add(MakeLandmark("Door Ice Place", doorIce, doorIce.position + Vector3.up * 1.5f + Vector3.back * 0.1f, "VAULT_DOOR", "the vault door",
-                "the steel blast door out of the vault, from inside. Two hundred years of ice hold it in its frame: you have tried for years and you are too small to shift it. Heat would melt the ice (a fire beside it, a torch held to it) and a hard blow would break it",
+                "the steel blast door out of the vault, from inside. It froze into its frame behind the Lindqvist brothers 71 years ago, and protocol 2 keeps it shut anyway. Heat would melt the ice (a fire beside it, a torch held to it); a hard blow would break it",
                 new Vector3(door + 0.4f, doorHigh, 0.8f)));
 
             // The hall behind it, inside the hill: z runs from 0 at the door wall to -30 at the far end.
@@ -309,8 +327,9 @@ namespace Game.Building
             var region = new GameObject("Hall Region").AddComponent<BoxCollider>();
             region.transform.SetParent(hall, false);
             region.isTrigger = true;
-            region.center = new Vector3(0f, HallHeight * 0.5f, mid);
-            region.size = new Vector3(HallWidth, HallHeight, HallLength);
+            // Indoors from the far wall to the blast door itself: the passage through the hill is inside too.
+            region.center = new Vector3(0f, HallHeight * 0.5f, (-HallLength + 4.6f) * 0.5f);
+            region.size = new Vector3(HallWidth, HallHeight, HallLength + 4.6f);
             region.gameObject.layer = 2;
             region.gameObject.AddComponent<Indoors>();
             parts.Hall = region;
@@ -339,23 +358,53 @@ namespace Game.Building
                 v.SetColor("emissiveFactor", state.GetColor("_EmissionColor")));
             var sleepPose = AssetDatabase.LoadAllAssetsAtPath(AssetDatabase.GetAssetPath(chamberModel)).OfType<AnimationClip>().FirstOrDefault();
             PodLights failing = null;
+            Bounds bodyBox = default, glassBox = default;
             Transform Pod(int number, float side, float z)
             {
                 var pod = new GameObject($"Pod {number}").transform;
                 pod.SetParent(hall, false);
                 pod.localPosition = new Vector3(side * (half - 0.43f), 0f, z);
                 pod.localRotation = Quaternion.Euler(0f, side > 0 ? -90f : 90f, 0f);
-                var status = Amber.Contains(number) ? amber : Red.Contains(number) ? red : Dark.Contains(number) ? dead : green;
+                bool empty = Empty.Contains(number);
+                var status = empty ? dead : Amber.Contains(number) ? amber : Red.Contains(number) ? red : Dark.Contains(number) ? dead : green;
                 var chamber = Art.Place(chamberModel, pod, new Vector3(0f, 0f, -0.02f), 2.55f, Quaternion.identity);
-                // Asleep: the stillest moment of the model's float, arms down, standing.
                 if (sleepPose) sleepPose.SampleAnimation(chamber, 0.45f);
                 foreach (var a in chamber.GetComponentsInChildren<Animation>(true)) Object.DestroyImmediate(a);
                 foreach (var a in chamber.GetComponentsInChildren<Animator>(true)) Object.DestroyImmediate(a);
+                // The model's own figure goes. One of the shelter's people stands in its place, in the shelter's suit, or
+                // nobody, the glass open: five were woken and left.
+                foreach (var r in chamber.GetComponentsInChildren<Renderer>(true))
+                {
+                    if (r.sharedMaterials.Any(m => m && m.name.StartsWith("HumanBody"))) r.enabled = false;
+                    else if (r.sharedMaterials.Any(m => m && m.name == "M_glass"))
+                    {
+                        // Where a person stands in it: on its base, inside the glass, a little back from its middle.
+                        if (glassBox.size == Vector3.zero)
+                        {
+                            glassBox = Art.Measure(r.gameObject, pod);
+                            bodyBox = new Bounds(new Vector3(glassBox.center.x, glassBox.min.y + 0.9f, glassBox.center.z - 0.04f), new Vector3(0.5f, 1.8f, 0.36f));
+                        }
+                        if (empty) r.enabled = false;
+                    }
+                }
+                if (!empty) PutSleeper(pod, bodyBox, number);
                 var glow = GlowOf(status);
                 foreach (var r in chamber.GetComponentsInChildren<Renderer>(true))
                     r.sharedMaterials = r.sharedMaterials.Select(m => m == null ? m : m.name == "M_glow" ? glow : m.name == "M_glass" ? chamberGlass : m).ToArray();
                 // A faint light inside, the colour of the pod's state; the dead ones are dark.
                 Light inside = null;
+                if (empty)
+                {
+                    // The empty ones keep their maintenance light, dim and cold: enough to read by.
+                    var service = new GameObject("Pod Service Light").AddComponent<Light>();
+                    service.transform.SetParent(pod, false);
+                    service.transform.localPosition = new Vector3(0f, 2.1f, 0.25f);
+                    service.type = LightType.Point;
+                    service.color = new Color(0.7f, 0.82f, 0.95f);
+                    service.range = 1.9f;
+                    service.intensity = 0.7f;
+                    service.shadows = LightShadows.None;
+                }
                 if (status != dead)
                 {
                     inside = new GameObject("Pod Inside").AddComponent<Light>();
@@ -394,41 +443,91 @@ namespace Game.Building
                 if (i + 1 == 9)
                     landmarks.Add(MakeLandmark("Pod 9 Place", west, west.position + Vector3.up * 1.3f, "POD_9", "pod 9",
                         "pod 9: Mr. Okafor sleeps in it, who taught music at the school", new Vector3(1.2f, 2.6f, 1.2f)));
-                if (i > 0) Pod(20 + i, 1f, z);
+                if (i > 0 && i < alcoves - 1) Pod(20 + i, 1f, z);
+                var clueTurn = Quaternion.identity;
+                Vector3 inside(float y) => new Vector3(0f, y, glassBox.min.z + 0.12f);
+                switch (i + 1)
+                {
+                    case 3:
+                        Clue("Tomas Scratch", west, "Tomas Scratch", inside(1.45f), new Vector2(0.68f, 0.34f), clueTurn, clear: true);
+                        landmarks.Add(MakeLandmark("Pod 3 Place", west, west.position + Vector3.up * 1.3f, "POD_3", "pod 3, empty",
+                            "pod 3: empty, its glass open. Tomas Varga's: you woke him in year 61; he forced the door with a pry bar to go for help and never came back. He scratched words inside it",
+                            new Vector3(1.2f, 2.6f, 1.2f)));
+                        break;
+                    case 17:
+                        Clue("Mara Note", west, "Mara Note", inside(1.42f), new Vector2(0.42f, 0.525f), clueTurn);
+                        landmarks.Add(MakeLandmark("Pod 17 Place", west, west.position + Vector3.up * 1.3f, "POD_17", "pod 17, empty",
+                            "pod 17: empty. Mara Okonjo's, the engineer you woke in year 98; she stayed a month, then went for the sun mirror and never came back. Her note is still taped inside",
+                            new Vector3(1.2f, 2.6f, 1.2f)));
+                        break;
+                    case 11:
+                        Clue("Ima Drawing", west, "Ima Drawing", new Vector3(0.14f, 1.12f, glassBox.max.z + 0.015f), new Vector2(0.42f, 0.42f), clueTurn);
+                        landmarks.Add(MakeLandmark("Drawing Place", west, west.TransformPoint(new Vector3(0.14f, 1.12f, glassBox.max.z + 0.02f)), "IMA_DRAWING", "Ima's drawing",
+                            "a crayon drawing taped to pod 11's glass, at a child's height: you and Ima holding hands under a smiling sun; she wrote SPARK + IMA and KEEP THE LITES ON!! The night before she went to sleep",
+                            new Vector3(0.4f, 0.4f, 0.2f)));
+                        break;
+                }
+            }
+            // The empty ones on the east: the brothers' pods, and Dr. Hale's.
+            Transform EastPod(int number) => hall.Find($"Pod {number}");
+            if (EastPod(22) is Transform brothers)
+            {
+                Clue("Brothers Scratch", brothers, "Brothers Scratch", new Vector3(0f, 1.5f, glassBox.min.z + 0.12f), new Vector2(0.68f, 0.34f), Quaternion.identity, clear: true);
+                landmarks.Add(MakeLandmark("Pod 22 Place", brothers, brothers.position + Vector3.up * 1.3f, "POD_22", "pods 22 and 23, empty",
+                    "pods 22 and 23: empty. The Lindqvist brothers, Ben and Tyl, woken the same night in year 140; they left after a week, and the vault door froze behind them. They scratched words inside",
+                    new Vector3(1.2f, 2.6f, 1.2f)));
+            }
+            if (EastPod(33) is Transform hale)
+            {
+                Clue("Hale Label", hale, "Hale Label", new Vector3(0f, 1.55f, glassBox.min.z + 0.12f), new Vector2(0.62f, 0.18f), Quaternion.identity, clear: true);
+                landmarks.Add(MakeLandmark("Pod 33 Place", hale, hale.position + Vector3.up * 1.3f, "POD_33", "pod 33, empty",
+                    "pod 33: empty. Dr. Ada Hale's; you woke her in year 187, very weak. She taught you the names of the stars and died in the hall eleven days later, holding your shell. You put a label inside",
+                    new Vector3(1.2f, 2.6f, 1.2f)));
             }
             parts.Pod9 = failing;
 
-            // The survivor's pod at the far end, bigger, cracked open; its label frosted over; its own panel beside it.
+            // The survivor's pod: pod 40, the last alcove on the east, the same pod as everyone's. Its glass is a lid that
+            // Spark cuts free; its label frosted over; its own panel on the pier beside it.
             var mine = new GameObject("Your Pod").transform;
             mine.SetParent(hall, false);
-            mine.localPosition = new Vector3(0f, 0f, -HallLength + 0.75f);
-            // Its base is a low plate the survivor stands on, inside the pod.
-            Art.Slab("Pod Plinth", mine, steel, new Vector3(0f, 0.03f, -0.05f), new Vector3(1.4f, 0.06f, 0.95f), false);
-            Art.Slab("Pod Tread", mine, tread, new Vector3(0f, 0.066f, 0f), new Vector3(1.3f, 0.012f, 0.8f), false);
-            Art.Slab("Pod Back", mine, worn, new Vector3(0f, 1.5f, -0.45f), new Vector3(1.25f, 2.5f, 0.1f));
-            foreach (float post in new[] { -1f, 1f })
-                Art.Slab("Pod Post", mine, painted, new Vector3(post * 0.62f, 1.5f, -0.08f), new Vector3(0.14f, 2.5f, 0.8f));
-            Art.Slab("Pod Housing", mine, steel, new Vector3(0f, 2.92f, -0.08f), new Vector3(1.4f, 0.36f, 0.95f));
+            mine.localPosition = new Vector3(half - 0.43f, 0f, firstPier - (alcoves - 0.5f) * PodPitch);
+            mine.localRotation = Quaternion.Euler(0f, -90f, 0f);
+            var myChamber = Art.Place(chamberModel, mine, new Vector3(0f, 0f, -0.02f), 2.55f, Quaternion.identity);
+            if (sleepPose) sleepPose.SampleAnimation(myChamber, 0.45f);
+            foreach (var a in myChamber.GetComponentsInChildren<Animation>(true)) Object.DestroyImmediate(a);
+            foreach (var a in myChamber.GetComponentsInChildren<Animator>(true)) Object.DestroyImmediate(a);
+            var myGlow = GlowOf(amber);
+            foreach (var r in myChamber.GetComponentsInChildren<Renderer>(true))
+            {
+                if (r.sharedMaterials.Any(m => m && (m.name.StartsWith("HumanBody") || m.name == "M_glass"))) r.enabled = false;
+                else r.sharedMaterials = r.sharedMaterials.Select(m => m && m.name == "M_glow" ? myGlow : m).ToArray();
+            }
+            // Its floor, to stand on.
+            var footing = new GameObject("Pod Footing").AddComponent<BoxCollider>();
+            footing.transform.SetParent(mine, false);
+            footing.center = new Vector3(bodyBox.center.x, bodyBox.min.y - 0.06f, bodyBox.center.z);
+            footing.size = new Vector3(0.9f, 0.12f, Mathf.Max(0.5f, bodyBox.size.z + 0.2f));
             var lidPivot = new GameObject("Lid").transform;
             lidPivot.SetParent(mine, false);
-            lidPivot.localPosition = new Vector3(-0.55f, 1.42f, 0.3f);
-            var lidGlass = Box("Lid Glass", lidPivot, podGlass, new Vector3(0.55f, 0f, 0f), new Vector3(1.05f, 2.3f, 0.05f), false);
+            float lidWide = Mathf.Max(0.7f, glassBox.size.x), lidHigh = Mathf.Max(1.8f, glassBox.size.y);
+            lidPivot.localPosition = new Vector3(glassBox.min.x, glassBox.center.y, glassBox.max.z + 0.02f);
+            var lidGlass = Box("Lid Glass", lidPivot, podGlass, new Vector3(lidWide * 0.5f, 0f, 0f), new Vector3(lidWide, lidHigh, 0.04f), false);
             lidGlass.shadowCastingMode = ShadowCastingMode.Off;
-            var lidFrost = Box("Lid Rime", lidPivot, rimeLook, new Vector3(0.55f, 0f, 0.03f), new Vector3(1.05f, 2.3f, 0.004f), false);
+            var lidFrost = Box("Lid Rime", lidPivot, rimeLook, new Vector3(lidWide * 0.5f, 0f, 0.025f), new Vector3(lidWide, lidHigh, 0.004f), false);
             lidFrost.shadowCastingMode = ShadowCastingMode.Off;
             parts.Lid = lidPivot;
-            // The pod's own lamp, still on inside its housing: a cold white light on whoever stands in it.
+            // The pod's own lamp, still on inside: a cold white light on whoever stands in it.
             var podLamp = new GameObject("Pod Lamp").AddComponent<Light>();
             podLamp.transform.SetParent(mine, false);
-            podLamp.transform.localPosition = new Vector3(0f, 2.6f, 0.25f);
+            podLamp.transform.localPosition = new Vector3(0f, glassBox.max.y - 0.15f, bodyBox.center.z + 0.15f);
             podLamp.type = LightType.Point;
             podLamp.color = new Color(0.75f, 0.88f, 1f);
-            podLamp.range = 3.2f;
+            podLamp.range = 2.6f;
             podLamp.intensity = 1.1f;
             podLamp.shadows = LightShadows.Soft;
-            Art.Slab("Pod Label", mine, worn, new Vector3(0f, 2.92f, 0.4f), new Vector3(0.9f, 0.16f, 0.02f), false);
-            // Its own panel: a steel console beside it, the instrument set into its top.
-            var console = Art.Slab("Pod Console", mine, steel, new Vector3(1.08f, 0.55f, 0.12f), new Vector3(0.42f, 1.1f, 0.32f));
+            Clue("Pod 40 Label", mine, "Pod 40 Label", new Vector3(0f, glassBox.max.y + 0.1f, glassBox.max.z + 0.03f), new Vector2(0.62f, 0.12f), Quaternion.identity);
+            // Its own panel: a steel console on the pier beside it, toward the door, the instrument set into its top.
+            var console = Art.Slab("Pod Console", mine, steel, new Vector3(PodPitch * 0.5f, 0.55f, 0.72f), new Vector3(0.42f, 1.1f, 0.32f));
             Art.Prop("vintage_spacecraft_instrument", console.transform, new Vector3(0f, 0.55f, 0.02f), Quaternion.Euler(-25f, -15f, 0f));
             // It shrieks when the survivor wakes, a red lamp blinking on it, until they touch it.
             var panel = console.gameObject.AddComponent<Touchable>();
@@ -451,9 +550,9 @@ namespace Game.Building
             alarmLamp.intensity = 0f;
             alarmLamp.shadows = LightShadows.None;
             landmarks.Add(MakeLandmark("Your Pod Place", mine, mine.position + Vector3.up * 1.3f, "YOUR_POD", "your pod",
-                "the pod the survivor woke in, at the end of the hall; its glass cracked open in the cold. Its label is frosted; scraped clean it reads: ARCHITECT. LUMEN MIND SYSTEMS",
-                new Vector3(1.4f, 2.6f, 1.2f)));
-            parts.PodStand = mine.position + mine.forward * 0.08f;
+                "pod 40, the pod the survivor woke in, the last on the east side. It cracked in the cold, so you woke them by protocol 5. Its label is frosted over: only the number 40 and the letters R. ARCH can be read; the rest is under the frost",
+                new Vector3(1.2f, 2.6f, 1.2f)));
+            parts.PodStand = mine.TransformPoint(new Vector3(bodyBox.center.x, bodyBox.min.y, bodyBox.center.z));
             parts.PodFacing = mine.forward;
             // Crates in the west corner by it, barrels in the east.
             Art.Prop("old_military_crate", hall, new Vector3(-3.2f, 0f, -HallLength + 1.1f), Quaternion.Euler(0f, 90f, 0f));
@@ -473,6 +572,21 @@ namespace Game.Building
             Art.Prop("power_box_01", hall, new Vector3(2.95f, 2.75f, -0.02f), Quaternion.Euler(0f, 180f, 0f), solid: false);
             Art.Prop("security_camera_02", hall, new Vector3(4.2f, 4.1f, -0.05f), Quaternion.Euler(20f, 200f, 0f), solid: false);
 
+            Clue("Protocols Poster", hall, "Protocols Poster", new Vector3(-3.3f, 2.05f, -0.035f), new Vector2(0.9f, 1.2f), Quaternion.Euler(0f, 180f, 0f));
+            landmarks.Add(MakeLandmark("Poster Place", hall, hall.TransformPoint(new Vector3(-3.3f, 2.05f, -0.1f)), "PROTOCOLS", "the protocols poster",
+                "a faded poster on the wall by the door: SUNVALE CIVIL SHELTER 7, CARETAKER PROTOCOLS, your makers' five rules", new Vector3(0.8f, 1f, 0.2f)));
+            Clue("Status Screen", hall, "Status Screen", new Vector3(2.05f, 1.55f, -0.035f), new Vector2(0.8f, 0.5f), Quaternion.Euler(0f, 180f, 0f), 1.4f);
+            var screenLight = new GameObject("Screen Light").AddComponent<Light>();
+            screenLight.transform.SetParent(hall, false);
+            screenLight.transform.localPosition = new Vector3(2.05f, 1.55f, -0.45f);
+            screenLight.type = LightType.Point;
+            screenLight.color = new Color(0.45f, 1f, 0.65f);
+            screenLight.range = 2.2f;
+            screenLight.intensity = 0.5f;
+            landmarks.Add(MakeLandmark("Status Place", hall, hall.TransformPoint(new Vector3(2.05f, 1.55f, -0.1f)), "STATUS", "the hall's status screen",
+                "the hall's status screen by the door, still lit: power cells 4%, pods failed this year 2, empty 5, exterior -58 C, thaw not detected, sun mirror no signal",
+                new Vector3(0.9f, 0.6f, 0.2f)));
+
             // Spark's nest: the first alcove on the east, a shelf with what it kept.
             var nest = new GameObject("Nest").transform;
             nest.SetParent(hall, false);
@@ -488,15 +602,42 @@ namespace Game.Building
             cup.transform.localPosition = new Vector3(-0.1f, 0.06f, 0.05f);
             cup.transform.localScale = new Vector3(0.11f, 0.05f, 0.11f);
             Box("Music Box", nest, metal, new Vector3(-0.1f, 0.07f, 0.35f), new Vector3(0.16f, 0.12f, 0.12f), false);
+            Clue("Tally", nest, "Tally", new Vector3(0.43f, 0.95f, 0f), new Vector2(1.0f, 1.0f), Quaternion.Euler(0f, -90f, 0f), clear: true);
+            var shellLook = MakeLit("Old Caretaker Shell", new Color(0.2f, 0.2f, 0.19f), 0.4f, 0.6f);
+            var eyeLook = MakeLit("Old Caretaker Eye", new Color(0.02f, 0.02f, 0.025f), 0.85f, 0f);
+            for (int k = 0; k < 6; k++)
+            {
+                var shell = new GameObject($"Caretaker Shell {k + 1}").transform;
+                shell.SetParent(nest, false);
+                shell.localPosition = new Vector3(-0.05f + (k % 2) * 0.3f, -1.1f, -0.33f + (k / 2) * 0.33f);
+                shell.localRotation = Quaternion.Euler(0f, -90f + (k * 37 % 50) - 25f, k * 11 % 20);
+                float r = 0.26f;
+                var ball = MakePart("Shell", shell, sphere, shellLook, 1f);
+                ball.transform.localScale = new Vector3(r, r * 0.92f, r);
+                ball.transform.localPosition = new Vector3(0f, r * 0.46f, 0f);
+                var eye = MakePart("Dead Eye", shell, sphere, eyeLook, 1f);
+                eye.transform.localScale = new Vector3(r * 0.62f, r * 0.42f, r * 0.16f);
+                eye.transform.localPosition = new Vector3(0f, r * 0.52f, r * 0.44f);
+            }
+            var glassesLook = MakeLit("Hale Glasses", new Color(0.18f, 0.14f, 0.1f), 0.6f, 0.5f);
+            foreach (float lens in new[] { -0.035f, 0.035f })
+            {
+                var rim = MakePart("Glasses Rim", nest, cylinder, glassesLook, 1f);
+                rim.transform.localPosition = new Vector3(-0.15f, 0.012f, 0.22f + lens);
+                rim.transform.localScale = new Vector3(0.05f, 0.004f, 0.05f);
+            }
+            var arm = MakePart("Glasses Arm", nest, cube, glassesLook, 1f);
+            arm.transform.localPosition = new Vector3(-0.1f, 0.012f, 0.22f);
+            arm.transform.localScale = new Vector3(0.11f, 0.004f, 0.004f);
             var nestLamp = new GameObject("Nest Light").AddComponent<Light>();
             nestLamp.transform.SetParent(nest, false);
             nestLamp.transform.localPosition = new Vector3(-0.3f, 0.5f, 0f);
             nestLamp.type = LightType.Point;
             nestLamp.color = new Color(1f, 0.7f, 0.4f);
             nestLamp.range = 2.5f;
-            nestLamp.intensity = 1.2f;
+            nestLamp.intensity = 0.8f;
             landmarks.Add(MakeLandmark("Nest Place", nest, nest.position, "NEST", "Spark's nest",
-                "your nest: an alcove in the vault wall with the things you kept: a rubber duck, a chipped teacup, a music box that plays four notes", new Vector3(0.8f, 0.6f, 1.4f)));
+                "your nest by the door: an alcove with the things you kept: Ima's rubber duck, a chipped teacup, a music box that plays four notes, Dr. Hale's glasses, and below them the shells of the other six caretakers. On the wall, your tally of days in chalk: 77,112. days. still here.", new Vector3(0.8f, 0.6f, 1.4f)));
 
             var warmth = new GameObject("Vault Light").AddComponent<Light>();
             warmth.transform.SetParent(root, false);

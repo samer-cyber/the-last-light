@@ -57,6 +57,8 @@ namespace Game
         /// <summary>How the line changed its trust: -3 to 3, and why.</summary>
         public int Trust;
         public string TrustReason = "";
+        /// <summary>The protocol it chose to break with this line: NONE, DOOR, LEAVE or HARM.</summary>
+        public string Protocol = "NONE";
         public string Source;
         public float Seconds;
     }
@@ -89,6 +91,7 @@ namespace Game
         public static readonly string[] Shapes = { "BOX", "CYLINDER", "SPHERE", "CONE" };
         public static readonly string[] Moods = { "CALM", "HAPPY", "PLAYFUL", "CURIOUS", "SURE", "WORRIED", "SCARED", "SAD", "HURT", "ANGRY", "SORRY" };
         public static readonly string[] TrustChanges = { "MUCH_LESS", "LESS", "A_LITTLE_LESS", "SAME", "A_LITTLE_MORE", "MORE", "MUCH_MORE" };
+        public static readonly string[] Protocols = { "NONE", "DOOR", "LEAVE", "HARM" };
 
         /// <summary>
         /// Thinks about the words; calls back with the turn (never fails: word rules stand in). The
@@ -151,6 +154,7 @@ namespace Game
             }
             text.Append($" / weight {t.Importance}");
             if (t.Trust != 0) text.Append($" / trust {(t.Trust > 0 ? "+" : "")}{t.Trust} ({t.TrustReason})");
+            if (t.Protocol != "NONE") text.Append(" / BREAKS PROTOCOL ").Append(t.Protocol);
             if (!string.IsNullOrEmpty(t.Remember)) text.Append(" / remember: ").Append(t.Remember);
             if (!string.IsNullOrEmpty(t.DroneName)) text.Append(" / called: ").Append(t.DroneName);
             if (!string.IsNullOrEmpty(t.SurvivorName)) text.Append(" / survivor: ").Append(t.SurvivorName);
@@ -176,9 +180,10 @@ namespace Game
                            ",\"parts\":{\"type\":\"array\",\"items\":" + part + "}}}";
             string step = "{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"verb\",\"target\",\"to\",\"thing\",\"picture\"],\"properties\":{" +
                           "\"verb\":" + Enum(Verbs) + ",\"target\":" + Enum(ids) + ",\"to\":" + Enum(ids) + ",\"thing\":" + thing + ",\"picture\":" + text + "}}";
-            return "{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"say\",\"mood\",\"steps\",\"remember\",\"importance\",\"trust\",\"trust_reason\",\"drone_name\",\"survivor_name\"],\"properties\":{" +
+            return "{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"say\",\"mood\",\"steps\",\"remember\",\"importance\",\"trust\",\"trust_reason\",\"protocol\",\"drone_name\",\"survivor_name\"],\"properties\":{" +
                    "\"say\":" + text + ",\"mood\":" + Enum(Moods) + ",\"steps\":{\"type\":\"array\",\"items\":" + step + "}" +
                    ",\"remember\":" + text + ",\"importance\":" + integer + ",\"trust\":" + Enum(TrustChanges) + ",\"trust_reason\":" + text +
+                   ",\"protocol\":" + Enum(Protocols) +
                    ",\"drone_name\":" + text + ",\"survivor_name\":" + text + "}}";
         }
 
@@ -221,11 +226,24 @@ namespace Game
 
         [Serializable] class Entry { public string entry; }
 
+        /// <summary>
+        /// How hard to think: a real question, a long line or its own talk (in brackets) gets "low", which
+        /// answers with more life; a short command or a yes stays at the quick setting.
+        /// </summary>
+        string EffortFor(string words)
+        {
+            if (effort != "minimal") return effort;
+            string w = (words ?? "").Trim();
+            bool deep = w.StartsWith("(") || w.Contains("?") || w.Split(' ').Length > 9 ||
+                        new[] { "why", "how", "what", "who", "tell me", "explain", "remember", "think" }.Any(k => w.ToLowerInvariant().StartsWith(k));
+            return deep ? "low" : effort;
+        }
+
         string Body(string words, string moment, IList<string> ids, byte[] picture)
         {
             var body = new StringBuilder("{");
             body.Append("\"model\":").Append(MetaApi.Quote(model)).Append(',');
-            body.Append("\"reasoning_effort\":").Append(MetaApi.Quote(effort)).Append(',');
+            body.Append("\"reasoning_effort\":").Append(MetaApi.Quote(EffortFor(words))).Append(',');
             body.Append("\"max_completion_tokens\":6000,");
             body.Append("\"messages\":[");
             body.Append("{\"role\":\"system\",\"content\":").Append(MetaApi.Quote(card.text + "\n" + moment)).Append("},");
@@ -281,6 +299,7 @@ namespace Game
                 Importance = Mathf.Clamp(form.importance, 1, 10),
                 Trust = trust < 0 ? 0 : trust - 3,
                 TrustReason = Clip(form.trust_reason, 90),
+                Protocol = Pick(form.protocol, Protocols, "NONE"),
                 DroneName = Clip(form.drone_name, 20),
                 SurvivorName = Clip(form.survivor_name, 20),
             };
@@ -419,6 +438,7 @@ namespace Game
             public int importance;
             public string trust;
             public string trust_reason;
+            public string protocol;
             public string drone_name;
             public string survivor_name;
         }

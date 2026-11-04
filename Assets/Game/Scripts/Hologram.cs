@@ -143,6 +143,10 @@ namespace Game
             stopAt = Time.time + length;
             float began = Time.time;
             var camera = viewer.GetComponent<Camera>();
+            // The view it was drawn from, kept: the survivor is free to walk and look while it shows, and the window
+            // lines up with the place where the picture was taken, not with wherever they look now.
+            Vector3 takenAt = viewer.position;
+            Quaternion takenTurn = viewer.rotation;
             // Just ahead of the survivor's shoulder, so the light fans out from it toward the picture.
             drone.GoTo = survivor.position + forward * 1.1f + Vector3.Cross(Vector3.up, forward) * 0.9f + Vector3.up * 1.8f;
             drone.LookAt = centre;
@@ -161,8 +165,8 @@ namespace Game
                     float k = Time.time - began, lined = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((k - 4.2f) / 1.6f)) * (1f - Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((k - 7.6f) / 1.6f)));
                     float distance = 7.5f;
                     float high = 2f * distance * Mathf.Tan(camera.fieldOfView * 0.5f * Mathf.Deg2Rad);
-                    at = Vector3.Lerp(at, viewer.position + viewer.forward * distance, lined);
-                    turn = Quaternion.Slerp(floating, viewer.rotation, lined);
+                    at = Vector3.Lerp(at, takenAt + takenTurn * Vector3.forward * distance, lined);
+                    turn = Quaternion.Slerp(floating, takenTurn, lined);
                     scale = Vector3.Lerp(scale, new Vector3(high * camera.aspect, high, 1f), lined);
                 }
                 panel.transform.SetPositionAndRotation(at, turn);
