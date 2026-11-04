@@ -174,14 +174,47 @@ namespace Game
                 if (string.IsNullOrEmpty(p.Look)) p.Look = spec.look;
                 plan.Parts[i] = p;
             }
+            Clear(plan, r);
             return plan;
+        }
+
+        /// <summary>
+        /// A small thing that will stand loose is never made inside something solid (the ice on a door, a
+        /// wall): physics would throw it out, up onto whatever it touched. It is moved toward the survivor,
+        /// a little at a time, until it is clear.
+        /// </summary>
+        void Clear(Plan plan, Request r)
+        {
+            if (plan.Spec.form is "BRIDGE" or "STAIRS" or "RAMP" or "LIFT" or "PLATFORM" or "WALL" or "PILLAR" or "MIRROR" || r.ToHands) return;
+            Vector3 away = Flat(r.Viewer - plan.Centre);
+            if (away.sqrMagnitude < 0.01f) return;
+            away = away.normalized;
+            for (int step = 0; step < 12 && Touching(plan); step++)
+            {
+                for (int i = 0; i < plan.Parts.Count; i++)
+                {
+                    var p = plan.Parts[i];
+                    p.Position += away * 0.15f;
+                    plan.Parts[i] = p;
+                }
+                plan.Base += away * 0.15f;
+            }
+        }
+
+        bool Touching(Plan plan)
+        {
+            foreach (var p in plan.Parts)
+            {
+                // A little smaller than the part, and lifted off the floor it stands on.
+                Vector3 half = Vector3.Max(p.Size * 0.45f, Vector3.one * 0.02f);
+                if (Physics.CheckBox(p.Position + Vector3.up * 0.06f, half, p.Rotation, ground, QueryTriggerInteraction.Ignore)) return true;
+            }
+            return false;
         }
 
         /// <summary>The height of the ground under a point, looking down from above it.</summary>
         public bool GroundAt(Vector3 p, out float height, float from = 30f)
         {
-            // Under a roof (in the vault), look down from just under it, not from on top of it.
-            if (Physics.Raycast(p, Vector3.up, out var roof, from, ground, QueryTriggerInteraction.Ignore)) from = Mathf.Max(0.05f, roof.distance - 0.05f);
             if (Physics.Raycast(new Vector3(p.x, p.y + from, p.z), Vector3.down, out var hit, from + 60f, ground, QueryTriggerInteraction.Ignore))
             {
                 height = hit.point.y;
@@ -191,7 +224,23 @@ namespace Game
             return false;
         }
 
-        float Floor(Vector3 at, float from = 6f) => GroundAt(at, out float y, from) ? y : at.y;
+        /// <summary>
+        /// The floor a thing made at a point stands on: the first surface at or a little above the point's own
+        /// level, looking down. Under a roof or inside a hill (the vault) that is the floor, not the roof or the
+        /// hillside above it; with nothing near, the surface nearest above.
+        /// </summary>
+        float Floor(Vector3 at, float from = 6f)
+        {
+            var hits = Physics.RaycastAll(new Vector3(at.x, at.y + from, at.z), Vector3.down, from + 60f, ground, QueryTriggerInteraction.Ignore);
+            if (hits.Length == 0) return at.y;
+            float best = float.NegativeInfinity, lowest = float.PositiveInfinity;
+            foreach (var h in hits)
+            {
+                if (h.point.y <= at.y + 0.6f && h.point.y > best) best = h.point.y;
+                lowest = Mathf.Min(lowest, h.point.y);
+            }
+            return best > float.NegativeInfinity ? best : lowest;
+        }
 
         string Bridge(Plan plan, Request r, float size)
         {
