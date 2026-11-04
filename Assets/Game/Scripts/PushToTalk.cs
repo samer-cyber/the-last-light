@@ -17,7 +17,7 @@ namespace Game
         [SerializeField] AudioSource sound;
         [SerializeField] AudioClip startClip;
         [SerializeField] AudioClip stopClip;
-        [SerializeField, Tooltip("The longest a recording may run, in seconds.")] float longest = 12f;
+        [SerializeField, Tooltip("The longest a recording may run, in seconds.")] float longest = 30f;
         [SerializeField] int rate = 16000;
 
         /// <summary>The player let go of the key: what they said, as a WAV file.</summary>

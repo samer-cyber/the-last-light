@@ -19,7 +19,12 @@ namespace Game.Building
         static string pending;
 
         [MenuItem("Game/Play the Last Light", priority = 0)]
-        static void PlayLastLight() => Play(LastLight);
+        static void PlayLastLight()
+        {
+            // Played by hand, it opens on the title like the build (the test scripts set this back to 0).
+            PlayerPrefs.SetInt("menu in editor", 1);
+            Play(LastLight);
+        }
 
 
         static void Play(string scene)

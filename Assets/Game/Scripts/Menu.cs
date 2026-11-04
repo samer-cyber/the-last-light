@@ -32,6 +32,9 @@ namespace Game
             new GameObject("Menu").AddComponent<Menu>();
         }
 
+        /// <summary>Set by Main menu: the scene that loads next opens on the title.</summary>
+        static bool TitleNext;
+
         /// <summary>Whether the menu is up (the game is paused under it).</summary>
         public static bool IsOpen { get; private set; }
 
@@ -72,7 +75,8 @@ namespace Game
             overlay.style.display = DisplayStyle.None;
             document.rootVisualElement.Add(overlay);
             // In a build the game opens on its title; in the editor it goes straight in (tests and filming drive it).
-            if (!Application.isEditor || PlayerPrefs.GetInt("menu in editor", 0) == 1) Show(true);
+            if (!Application.isEditor || PlayerPrefs.GetInt("menu in editor", 0) == 1 || TitleNext) Show(true);
+            TitleNext = false;
         }
 
         void Retag() => AudioChannel.TagAll();
@@ -207,6 +211,7 @@ namespace Game
             Time.timeScale = 1f;
             AudioListener.pause = false;
             IsOpen = false;
+            TitleNext = true;
             SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
         }
 

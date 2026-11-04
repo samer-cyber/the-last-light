@@ -269,7 +269,7 @@ namespace Game.Building
             SetSide(body, "left", figure.Left);
             SetSide(body, "right", figure.Right);
             // The survivor's look: a rigged model whose skeleton follows the figure's joints.
-            Dress(figure, hand, travellerLayer, "CryoMan", 1.78f);
+            Dress(figure, hand, travellerLayer, "CoolMan", 1.78f);
 
             var say = interfaceObject.AddComponent<SayLine>();
             Wire(say, ("document", document), ("style", sayStyle), ("traveller", traveller), ("follow", follow), ("sound", typeSound));
@@ -900,7 +900,11 @@ namespace Game.Building
             hum.playOnAwake = true;
             hum.volume = 0.2f;
             var voice = MakeSource("Voice", root.transform, null, false);
-            voice.spatialBlend = 0.35f;
+            // Heard from where it is (left, right, behind you), full voice within a few metres.
+            voice.spatialBlend = 0.9f;
+            voice.rolloffMode = AudioRolloffMode.Logarithmic;
+            voice.minDistance = 5f;
+            voice.maxDistance = 60f;
             var drone = root.AddComponent<Drone>();
             Wire(drone, ("travellerBody", travellerBody), ("follow", follow), ("shell", shell), ("iris", irisPivot), ("irisRenderer", irisRenderer),
                 ("glow", glow), ("shine", shine), ("beam", beam), ("eye", eye), ("hum", hum), ("voice", voice), ("moveClip", FindClip("drone_move")));

@@ -25,8 +25,8 @@ Material:
     m_TexEnvs: []
     m_Ints: []
     m_Floats:
-    - _Density: 0.8
-    - _Face: 1.62
+    - _Density: 1.25
+    - _Face: -10
     - _Floor: 0
     - _Glow: 0.14
     m_Colors:

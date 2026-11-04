@@ -476,7 +476,9 @@ namespace Game
             bool chirps = !clip;
             if (chirps) clip = DroneVoice.Chirps(line, mood);
             envelope = chirps ? null : SparkVoice.Envelope(clip);
-            float seconds = clip.length;
+            // Its recorded voice plays 7% fast (Samer: it should talk a little faster); chirps keep their pitch.
+            float pace = chirps ? 1f : 1.07f;
+            float seconds = clip.length / pace;
             // Now and then, a sound of its own first: a curious warble, a nervous double beep, a happy trill.
             var chirp = given || quick ? null : Chirp(mood);
             if (chirp && voice)
@@ -486,7 +488,7 @@ namespace Game
             }
             if (voice)
             {
-                voice.pitch = 1f;
+                voice.pitch = pace;
                 voice.PlayOneShot(clip, chirps ? 0.75f : voiceVolume);
             }
             Feel(mood, mood is "SAD" or "HURT" ? Mathf.Min(0.7f, seconds * 0.3f) : mood is "HAPPY" or "PLAYFUL" ? 0.05f : 0.25f);

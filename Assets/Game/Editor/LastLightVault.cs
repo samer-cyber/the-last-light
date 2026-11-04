@@ -389,9 +389,9 @@ namespace Game.Building
             var chamberGlass = MakeMaterial("Pod Frost Glass", "Game/Frost", m =>
             {
                 m.SetColor("_Color", new Color(0.74f, 0.83f, 0.92f, 1f));
-                m.SetFloat("_Density", 0.8f);
+                m.SetFloat("_Density", 1.25f);
                 m.SetFloat("_Floor", 0f);
-                m.SetFloat("_Face", 1.62f);
+                m.SetFloat("_Face", -10f);
                 m.SetFloat("_Glow", 0.14f);
             });
             Material GlowOf(Material state) => Art.Variant(chamberGlow, "Chamber Glow " + state.name.Replace("Pod Light ", ""), v =>

@@ -237,7 +237,7 @@ namespace Game
         (string line, string mood)? cutLine;
         [SerializeField] AudioClip gustClip;
         [SerializeField, Tooltip("Snow blown in when the vault door first opens.")] ParticleSystem doorGust;
-        int lines, ideas, quietLines;
+        int lines, ideas, quietLines, hearing;
         float quietSince;
         string ideaStage;
         Bond bond;
@@ -335,7 +335,7 @@ namespace Game
             bool nowTalking = open && (talk.Listening || say.IsOpen);
             if (nowTalking && !talking) drone.Hush();
             talking = nowTalking;
-            drone.Quiet = talking || handling || cutLine != null;
+            drone.Quiet = talking || handling || hearing > 0 || waiting.Count > 0 || cutLine != null;
             drone.Level = talk.Level;
             traveller.Attending = drone.Listening || drone.Speaking ? drone.transform.position : (Vector3?)null;
             Vector3 at = traveller.transform.position;
@@ -923,7 +923,7 @@ namespace Game
         /// </summary>
         bool Ready(string protocol) => protocol switch
         {
-            "DOOR" => bond.Trust >= 16 && (pod9 == null || pod9.Failed || lines >= 8),
+            "DOOR" => bond.Trust >= 12 && (pod9 == null || pod9.Failed || lines >= 6),
             "LEAVE" => breached.Contains("DOOR") && bond.Trust >= 26,
             "HARM" => breached.Contains("LEAVE") && bond.Trust >= 50,
             _ => false,
@@ -1008,6 +1008,7 @@ namespace Game
         /// <summary>Speech, turned into words by Muse Voice Transcribe, then taken like anything written.</summary>
         IEnumerator Hear(byte[] wav)
         {
+            hearing++;
             hud.Waiting("…");
             drone.Blip(false);
             string words = null, error = null;
@@ -1015,11 +1016,13 @@ namespace Game
             hud.StopListening();
             if (string.IsNullOrWhiteSpace(words))
             {
+                hearing--;
                 if (error != null) Debug.LogWarning("Transcription failed: " + error);
                 hud.Note(error != null ? "it could not hear you.   [Tab] write instead" : "it heard nothing.   hold [Q] and speak", 4f);
                 yield break;
             }
             waiting.Enqueue((words.Trim(), true));
+            hearing--;
         }
 
         IEnumerator Answering()
@@ -1094,6 +1097,8 @@ namespace Game
                 if (turn.Steps.All(s => s.verb != "MAKE" || s.thing.form != "WEAPON")) drone.BackAway();
             }
             Log(words, spoken, Mind.Describe(turn), turn.Seconds, turn.Source);
+            if (!breached.Contains("DOOR") && !Ready("DOOR") && !doorOpen && Wants(words, "door", "leave", "out", "outside", "open", "melt", "fire", "go"))
+                StartCoroutine(Hint("Spark won't break protocol 2 for a stranger. Look around first: read what the others left in their pods, ask about the sleepers. Then ask again.", 10f));
             yield return Act(turn, ids, words, 0);
             if (bond.WantsReflection && !reflecting) StartCoroutine(Reflect());
         }
@@ -1102,6 +1107,8 @@ namespace Game
         /// What the survivor sees now, over their shoulder, without the two of them in it: the picture Spark answers
         /// from (asked "what am I looking at?", it sees exactly that), with its shutter sound.
         /// </summary>
+        Texture2D lastSeen;
+
         byte[] View()
         {
             var drawn = body.GetComponentsInChildren<Renderer>().Concat(drone.GetComponentsInChildren<Renderer>()).Where(r => r.enabled).ToList();
@@ -1109,6 +1116,17 @@ namespace Game
             byte[] jpeg = follow.Capture(768, 432);
             foreach (var r in drawn) r.enabled = true;
             drone.Blink();
+            if (jpeg != null)
+            {
+                var seen = new Texture2D(2, 2, TextureFormat.RGB24, false);
+                if (seen.LoadImage(jpeg))
+                {
+                    hud.Photo(seen, $"{droneName.ToUpperInvariant()} SEES   ·   WHAT YOU SEE", 6f);
+                    if (lastSeen) Destroy(lastSeen);
+                    lastSeen = seen;
+                }
+                else Destroy(seen);
+            }
             return jpeg;
         }
 
