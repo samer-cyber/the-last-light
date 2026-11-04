@@ -59,8 +59,9 @@ namespace Game.Building
             var glass = MakeMatter("Matter Glass", new Color(0.55f, 0.7f, 0.74f), new Color(0.45f, 0.6f, 0.66f), 0.97f, 0.15f, new Color(0.9f, 0.97f, 1f), new Color(0.35f, 0.55f, 0.65f), Color.black);
             var wood = MakeMatter("Matter Wood", new Color(0.36f, 0.24f, 0.15f), new Color(0.22f, 0.14f, 0.08f), 0.28f, 0f, new Color(0.46f, 0.33f, 0.21f), Color.black, Color.black);
             var light = MakeMatter("Matter Light", new Color(1f, 0.9f, 0.75f), new Color(1f, 0.8f, 0.6f), 0.5f, 0f, new Color(1f, 0.95f, 0.85f), new Color(1.2f, 0.8f, 0.5f), new Color(2.4f, 1.7f, 1.1f));
-            // In the order the model names them (Mind.Looks): stone, metal, ice, glass, wood, light.
-            var looks = new[] { stone, metal, ice, glass, wood, light };
+            var snowMatter = MakeMatter("Matter Snow", new Color(0.88f, 0.9f, 0.95f), new Color(0.74f, 0.78f, 0.86f), 0.1f, 0f, new Color(0.97f, 0.98f, 1f), new Color(0.32f, 0.38f, 0.48f), new Color(0.11f, 0.12f, 0.15f));
+            // In the order the model names them (Mind.Looks): stone, metal, ice, glass, wood, light, snow.
+            var looks = new[] { stone, metal, ice, glass, wood, light, snowMatter };
             var oldIce = MakeMatter("Old Ice", new Color(0.56f, 0.76f, 0.88f), new Color(0.4f, 0.6f, 0.76f), 0.95f, 0f, new Color(0.85f, 0.95f, 1f), new Color(0.3f, 0.6f, 0.85f), new Color(0.04f, 0.09f, 0.14f));
             var concrete = MakeMatter("Vault Concrete", new Color(0.3f, 0.3f, 0.31f), new Color(0.22f, 0.22f, 0.24f), 0.12f, 0f, new Color(0.42f, 0.42f, 0.42f), Color.black, Color.black);
             var ghost = MakeMaterial("Plan Ghost", "Game/Ghost", m =>

@@ -32,6 +32,7 @@ The model never holds state: the game keeps the truth (trust, memories, what exi
 - The whole scene is built from code (`Assets/Game/Editor/`): `LastLightSceneBuilder` and its parts (`LastLightVault`, `LastLightWorld`, `LastLightSurvivor`), so every change is reviewable as code.
 - `Scripts/LastLightDirector.cs` runs the story; `Mind.cs` is the call to Muse Spark and its schema; `MetaApi.cs` talks to Meta's API; `Bond.cs` holds trust and memories; `Maker.cs` turns the model's described things into objects with physics; `Hologram.cs` projects Muse Image's pictures; `RigFollow.cs` makes the survivor's rigged model follow a hand-animated figure.
 - The drone's instructions are `Assets/Game/Story/Drone card.txt`.
+- **The trailer was filmed inside the game, unscripted.** `Scripts/Filming.cs` records 1920x1080 frames (camera and HUD) and the game's own sound offline, with game time locked to 30 fps so the waits on Meta's API vanish from the footage; `Scripts/Dolly.cs` moves the camera. Every line Spark speaks in the trailer is what Muse Spark said while it was filmed (one is laid over a re-take of the same moment), and the cut points were found by transcribing the takes with Muse Voice Transcribe.
 
 ## Built during the event
 

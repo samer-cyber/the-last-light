@@ -82,7 +82,7 @@ namespace Game
 
         public static readonly string[] Verbs = { "LOOK", "MAKE", "UNMAKE", "MOVE", "COME", "WAIT", "SHOW", "SHOW_HERE", "DISTRACT" };
         public static readonly string[] Forms = { "BRIDGE", "STAIRS", "RAMP", "LIFT", "PLATFORM", "WALL", "PILLAR", "BLOCK", "BALL", "PLANK", "LAMP", "FIRE", "BALLOON", "SPRING", "TOOL", "GLIDER", "SHIELD", "MIRROR", "DECOY", "THROWN", "WEAPON", "CUSTOM" };
-        public static readonly string[] Looks = { "STONE", "METAL", "ICE", "GLASS", "WOOD", "LIGHT" };
+        public static readonly string[] Looks = { "STONE", "METAL", "ICE", "GLASS", "WOOD", "LIGHT", "SNOW" };
         public static readonly string[] Sizes = { "TINY", "SMALL", "MEDIUM", "LARGE", "HUGE" };
         public static readonly string[] Weights = { "FEATHER", "LIGHT", "NORMAL", "HEAVY" };
         public static readonly string[] Heats = { "COLD", "NONE", "WARM", "HOT" };

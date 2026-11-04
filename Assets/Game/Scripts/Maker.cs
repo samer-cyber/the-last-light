@@ -111,6 +111,7 @@ namespace Game
             "GLASS" => 2500f,
             "WOOD" => 600f,
             "LIGHT" => 40f,
+            "SNOW" => 450f,
             _ => 2600f,
         };
 
@@ -898,7 +899,7 @@ namespace Game
             {
                 var ember = new MaterialPropertyBlock();
                 piece.GetPropertyBlock(ember);
-                ember.SetColor(EmissionId, new Color(4f, 1.2f, 0.25f));
+                ember.SetColor(EmissionId, new Color(2.1f, 0.55f, 0.1f));
                 piece.SetPropertyBlock(ember);
             }
             int lookIndex = LookIndex(part.Look);
@@ -945,6 +946,18 @@ namespace Game
                 body.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
                 body.angularDamping = 0.6f;
                 if (spec.floats) body.isKinematic = true;
+                if (plan.Parts.Count >= 2 && !spec.floats)
+                {
+                    Bounds bounds = default;
+                    bool any = false;
+                    foreach (var shown in holder.GetComponentsInChildren<Renderer>())
+                    {
+                        if (shown is ParticleSystemRenderer || shown is LineRenderer) continue;
+                        if (!any) { bounds = shown.bounds; any = true; }
+                        else bounds.Encapsulate(shown.bounds);
+                    }
+                    if (any) body.centerOfMass = holder.transform.InverseTransformPoint(new Vector3(bounds.center.x, bounds.min.y + Mathf.Min(0.12f, bounds.size.y * 0.1f), bounds.center.z));
+                }
             }
 
             // Heat, light.
@@ -1109,17 +1122,25 @@ namespace Game
             system.transform.position = at;
             system.transform.rotation = Quaternion.Euler(-90f, 0f, 0f);
             var main = system.main;
-            main.startLifetime = new ParticleSystem.MinMaxCurve(0.5f, 0.9f);
-            main.startSpeed = new ParticleSystem.MinMaxCurve(0.6f, 1.4f);
-            main.startSize = new ParticleSystem.MinMaxCurve(0.25f * size, 0.6f * size);
-            main.startColor = new ParticleSystem.MinMaxGradient(new Color(1f, 0.55f, 0.2f, 0.8f), new Color(1f, 0.3f, 0.08f, 0.6f));
+            float s = Mathf.Clamp(size, 0.5f, 2f);
+            main.startLifetime = new ParticleSystem.MinMaxCurve(0.55f, 1.0f);
+            main.startSpeed = new ParticleSystem.MinMaxCurve(0.7f * s, 1.5f * s);
+            main.startSize = new ParticleSystem.MinMaxCurve(0.35f * s, 0.75f * s);
+            main.startRotation = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
+            main.startColor = new ParticleSystem.MinMaxGradient(new Color(1f, 0.6f, 0.22f, 0.85f), new Color(1f, 0.32f, 0.08f, 0.7f));
             main.simulationSpace = ParticleSystemSimulationSpace.World;
-            main.maxParticles = 120;
+            main.maxParticles = 260;
             var emission = system.emission;
-            emission.rateOverTime = 40f * Mathf.Clamp(size, 0.5f, 2f);
+            emission.rateOverTime = 75f * s;
             var shape = system.shape;
-            shape.shapeType = ParticleSystemShapeType.Circle;
-            shape.radius = 0.3f * size;
+            shape.shapeType = ParticleSystemShapeType.Cone;
+            shape.angle = 9f;
+            shape.radius = 0.26f * s;
+            var noise = system.noise;
+            noise.enabled = true;
+            noise.strength = 0.45f * s;
+            noise.frequency = 1.6f;
+            noise.scrollSpeed = 1.2f;
             var colour = system.colorOverLifetime;
             colour.enabled = true;
             var gradient = new Gradient();
