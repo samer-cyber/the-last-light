@@ -159,6 +159,15 @@ namespace Game.Building
             sunlight.shadows = LightShadows.Soft;
             sunlight.shadowStrength = 0.85f;
             RenderSettings.sun = sunlight;
+            // The sky's faint cold glow from behind, as the survivor walks north into the sun: without it everything ahead
+            // is a black shape against the red. Outdoors only.
+            var fill = new GameObject("Sky Fill").AddComponent<Light>();
+            fill.type = LightType.Directional;
+            fill.transform.rotation = Quaternion.LookRotation(new Vector3(0.25f, -0.55f, 0.8f));
+            fill.color = new Color(0.5f, 0.56f, 0.76f);
+            fill.intensity = 0.5f;
+            fill.shadows = LightShadows.None;
+            fill.gameObject.AddComponent<OutdoorsOnly>();
 
             // The Lattice: the great minds' black net round the sun.
             MakeLattice(quad, SunDirection);
@@ -213,6 +222,11 @@ namespace Game.Building
             // Snow, drifting past the camera all the time.
             var snow = MakeParticles("Snow", cameraObject.transform, snowMaterial);
             Snow(snow);
+            snow.gameObject.AddComponent<OutdoorsOnly>();
+            // Snow blown along the ground round the survivor, in streaks and gusts.
+            var blowing = MakeParticles("Blowing Snow", travellerObject.transform, snowMaterial);
+            BlowingSnow(blowing);
+            blowing.gameObject.AddComponent<OutdoorsOnly>();
 
             var volume = new GameObject("Global Volume").AddComponent<Volume>();
             volume.isGlobal = true;
@@ -286,7 +300,8 @@ namespace Game.Building
                 m.SetColor("_BaseColor", posterTexture ? new Color(0.75f, 0.72f, 0.7f) : new Color(0.2f, 0.18f, 0.16f));
                 m.SetFloat("_Smoothness", 0.15f);
             });
-            MakeTown(world, cube, cylinder, quad, concrete, roofMetal, snowCover, visor, metal, posterMaterial, landmarks);
+            MakeTown(world, cube, cylinder, quad, concrete, roofMetal, snowCover, oldIce, metal, posterMaterial, landmarks);
+            MakeTownDetail(world, cube, cylinder, ball, quad, billboard, snowCover, groundMaterial, metal, softDot, landmarks);
 
             // The chasm, all the way across the valley, and the far side.
             float chasmMid = (ChasmNear + ChasmFar) * 0.5f;
@@ -447,7 +462,7 @@ namespace Game.Building
                 if (r.GetComponent<Collider>() || r.GetComponentInParent<Rigidbody>()) continue;
                 if (!r.enabled || yourPod && r.transform.IsChildOf(yourPod.transform)) continue;
                 string n = r.name;
-                if (new[] { "Glow", "Beam", "Shaft", "Writing", "Light Line", "Window", "Band", "Flame", "Ghost", "Face" }.Any(n.Contains)) continue;
+                if (new[] { "Glow", "Beam", "Shaft", "Writing", "Light Line", "Window", "Band", "Flame", "Ghost", "Face", "Mist" }.Any(n.Contains)) continue;
                 var filter = r.GetComponent<MeshFilter>();
                 if (filter && filter.sharedMesh) r.gameObject.AddComponent<MeshCollider>().sharedMesh = filter.sharedMesh;
             }

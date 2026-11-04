@@ -17,6 +17,14 @@ mounted_fluorescent_lights, caged_hanging_light, industrial_caged_sconce, modula
 
 **"PSX Snowy House"** by **Shazly**, https://sketchfab.com/3d-models/c17b3cf25c18488d9857f2dfc04b12f8, **"Snowy North American Chalet Cabin – Low Poly"** by **ARTEL_3D**, https://sketchfab.com/3d-models/44ed4093f2904361898b9cbc3dcc1aa9, and **"Cabin Model - Snowey"** by **alivisualz**, https://sketchfab.com/3d-models/d31ca61470fe4d3ab2e399899088636a, each licensed under Creative Commons Attribution 4.0 (https://creativecommons.org/licenses/by/4.0/). The houses of the frozen town: placed, sized and turned by the game's editor code, some sunk and tilted as if fallen in, their materials moved to URP Lit with a faint glow from their own textures.
 
+The rest of the town, each licensed under Creative Commons Attribution 4.0 (https://creativecommons.org/licenses/by/4.0/), placed, sized and sunk into the snow by the game's editor code, their materials moved to URP Lit:
+- **"Abandoned street lights pack"** by **sergeilihandristov**, https://sketchfab.com/3d-models/c853eca300e8435d8fe9206bcb524eda: the power line's poles and the street lamps (the pack split into single poles; the wires between them are drawn by the game).
+- **"Abandoned Playground"** by **sergeilihandristov**, https://sketchfab.com/3d-models/fee40d7bf3e24de5b694d7aa3486066a, and **"Abandoned children's slide"** by **sergeilihandristov**, https://sketchfab.com/3d-models/11de2b21ec264c0a814ac024c45ab425: the school's swings and slide.
+- **"Abandoned Generic Sedan 2 - Game Ready"** by **Rashad Ibrahimli**, https://sketchfab.com/3d-models/db2df46c49f9441286c84c66208ef7ac, **"ZAZ-1105 "Dana" FreeLowPoly"** by **sMoKi**, https://sketchfab.com/3d-models/74cc5d3c2c7c42d18dc45dafd65cf666, and **"Pirozhok Scan Retopo (Free Scan)"** by **Renafox**, https://sketchfab.com/3d-models/07bc48134b364d4f8a43d288b3a0282d: the buried cars.
+- **"Abandoned School Bus - Rusty Low Poly bus"** by **shams**, https://sketchfab.com/3d-models/3711f6512b5d4a8fb15c6a6a1ffb1dfc: the school bus.
+- **"Low Poly: Dead Tree"** by **ClintonAbbott.Art**, https://sketchfab.com/3d-models/addc2aef9e534a93a8798320fea440ef, and **"Dead Tree"** by **MaX3Dd**, https://sketchfab.com/3d-models/33ccce6111604656a4b5709483670ec3: the dead trees.
+- **"BROKEN BRIDGE"** by **drcrazzie**, https://sketchfab.com/3d-models/95309d482f9949c0b87d4f0801f4a70f: the old bridge over the chasm (its middle cut away by the game's editor code).
+
 **"Male Hooded Character - IDLE [MESHY]"** by **Ethan Cox**, https://sketchfab.com/3d-models/324bb454193f41e9b46e286a06a5a5f9, licensed under Creative Commons Attribution 4.0 (https://creativecommons.org/licenses/by/4.0/). The survivor's earlier look (no longer used in the scene).
 
 ## Signs and clues

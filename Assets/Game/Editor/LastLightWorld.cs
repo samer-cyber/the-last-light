@@ -144,6 +144,7 @@ namespace Game.Building
         {
             var root = new GameObject("Town").transform;
             root.SetParent(parent, false);
+            houseSpots.Clear();
             var random = new System.Random(7);
             float R(float a, float b) => a + (float)random.NextDouble() * (b - a);
             Renderer Box(string name, Transform under, Material m, Vector3 at, Vector3 size, Quaternion turn)
@@ -241,6 +242,7 @@ namespace Game.Building
             {
                 var house = new GameObject($"House {index}").transform;
                 house.SetParent(root, false);
+                houseSpots.Add(at);
                 float w = R(6f, 9f), d = R(7f, 10f), h = R(4f, 7.5f);
                 bool fallen = random.NextDouble() < 0.33;
                 var turn = Quaternion.Euler(0f, yaw, 0f);
@@ -282,49 +284,43 @@ namespace Game.Building
                     if (random.NextDouble() < 0.45) House(new Vector3(side * R(42f, 50f), 0f, z + R(-3f, 3f)), R(0f, 360f), count++);
                 }
             }
-            // Lamp posts along the main street, dead.
-            for (float z = TownNear + 4f; z < TownFar; z += 14f)
-                foreach (float side in new[] { -1f, 1f })
-                {
-                    var post = MakePart("Lamp Post", root, cylinder, metal, 1f);
-                    float x = side * 6.5f;
-                    post.transform.position = new Vector3(x, Height(x, z) + 2.2f, z);
-                    post.transform.localScale = new Vector3(0.14f, 2.2f, 0.14f);
-                    post.transform.rotation = Quaternion.Euler(R(-4f, 4f), 0f, R(-6f, 6f));
-                    post.shadowCastingMode = ShadowCastingMode.On;
-                    var head = Box("Lamp Head", root, metal, post.transform.position + Vector3.up * 2.2f + Vector3.right * -side * 0.4f, new Vector3(0.9f, 0.15f, 0.3f), Quaternion.identity);
-                    if (random.NextDouble() < 0.3)
-                    {
-                        var lamp = new GameObject("Lamp Light").AddComponent<Light>();
-                        lamp.transform.position = head.transform.position + Vector3.down * 0.3f;
-                        lamp.transform.SetParent(root, true);
-                        lamp.type = LightType.Point;
-                        lamp.color = new Color(1f, 0.72f, 0.42f);
-                        lamp.range = 14f;
-                        lamp.intensity = 2.2f;
-                        lamp.gameObject.AddComponent<Flicker>();
-                    }
-                }
-            // Cars, buried to the windows.
-            for (int i = 0; i < 9; i++)
-            {
-                float x = R(-5f, 5f), z = R(TownNear + 5f, TownFar - 5f);
-                if (Mathf.Abs(z - 70f) < 10f) z += 18f;
-                float g = Height(x, z);
-                var turn = Quaternion.Euler(R(-4f, 4f), R(0f, 360f), R(-5f, 5f));
-                Box("Car", root, metal, new Vector3(x, g + 0.45f, z), new Vector3(1.9f, 0.9f, 4.3f), turn);
-                Box("Car Cabin", root, metal, new Vector3(x, g + 1.05f, z) + turn * new Vector3(0f, 0f, -0.3f), new Vector3(1.6f, 0.6f, 2.1f), turn);
-                Box("Car Snow", root, snow, new Vector3(x, g + 1.42f, z) + turn * new Vector3(0f, 0f, -0.3f), new Vector3(1.55f, 0.15f, 2f), turn);
-            }
+            // Lamps, the power line, cars, the school, trees and drifts: MakeTownDetail.
             // The square: a frozen fountain, and Lumen's billboard.
             float sy = Height(0f, 70f);
+            var ball = Resources.GetBuiltinResource<Mesh>("Sphere.fbx");
             var basin = MakePart("Fountain Basin", root, cylinder, wall, 1f);
             basin.transform.position = new Vector3(0f, sy + 0.4f, 70f);
             basin.transform.localScale = new Vector3(6f, 0.4f, 6f);
             basin.shadowCastingMode = ShadowCastingMode.On;
-            var column = MakePart("Fountain Ice", root, cylinder, glass, 1f);
-            column.transform.position = new Vector3(0f, sy + 2f, 70f);
-            column.transform.localScale = new Vector3(0.9f, 2f, 0.9f);
+            var pool = MakePart("Fountain Pool Ice", root, cylinder, glass, 1f);
+            pool.transform.position = new Vector3(0f, sy + 0.62f, 70f);
+            pool.transform.localScale = new Vector3(5.5f, 0.2f, 5.5f);
+            var pillar = MakePart("Fountain Pillar", root, cylinder, wall, 1f);
+            pillar.transform.position = new Vector3(0f, sy + 1.5f, 70f);
+            pillar.transform.localScale = new Vector3(0.55f, 1.1f, 0.55f);
+            pillar.shadowCastingMode = ShadowCastingMode.On;
+            var bowl = MakePart("Fountain Bowl", root, cylinder, wall, 1f);
+            bowl.transform.position = new Vector3(0f, sy + 2.62f, 70f);
+            bowl.transform.localScale = new Vector3(2.3f, 0.16f, 2.3f);
+            bowl.shadowCastingMode = ShadowCastingMode.On;
+            // The water as it was the moment it froze: a jet up from the bowl, falling over in ropes, icicles round the rim.
+            var column = MakePart("Fountain Ice", root, ball, glass, 1f);
+            // (The sphere is 2 m across.)
+            column.transform.position = new Vector3(0f, sy + 3.35f, 70f);
+            column.transform.localScale = new Vector3(0.09f, 0.8f, 0.09f);
+            // Where the jet broke and fell: a cap of ice over the bowl, ropes of it hanging to the pool.
+            var crown = MakePart("Fountain Ice", root, ball, glass, 1f);
+            crown.transform.position = new Vector3(0f, sy + 2.78f, 70f);
+            crown.transform.localScale = new Vector3(1.2f, 0.22f, 1.2f);
+            for (int k = 0; k < 16; k++)
+            {
+                var round = Quaternion.Euler(0f, k * 360f / 16f + 7f, 0f);
+                var icicle = MakePart("Fountain Icicle", root, ball, glass, 1f);
+                float drop = 0.5f + 1.5f * Mathf.PerlinNoise(k * 0.9f, 2.3f) * Mathf.PerlinNoise(k * 0.4f + 5f, 0.7f);
+                icicle.transform.position = new Vector3(0f, sy + 2.6f - drop * 0.5f, 70f) + round * new Vector3(0f, 0f, 1.02f);
+                float thick = 0.035f + 0.025f * (drop / 2f);
+                icicle.transform.localScale = new Vector3(thick, drop * 0.5f, thick);
+            }
             landmarks.Add(MakeLandmark("Fountain Place", root, new Vector3(0f, sy + 1.5f, 70f), "FOUNTAIN", "the frozen fountain",
                 "the fountain in the town square, frozen mid-spray two hundred years ago", new Vector3(6f, 4f, 6f)));
             var board = new GameObject("Billboard").transform;

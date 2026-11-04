@@ -7,13 +7,21 @@ namespace Game
     {
         [SerializeField] Light lamp;
         [SerializeField, Range(0f, 1f)] float steadiness = 0.75f;
+        [SerializeField, Tooltip("A glow round the lamp, which dims with it.")] Transform glow;
         float full, next, target;
+        Vector3 glowSize;
 
         void Start()
         {
             if (!lamp) lamp = GetComponent<Light>();
             full = lamp ? lamp.intensity : 1f;
             target = full;
+            if (glow) glowSize = glow.localScale;
+        }
+
+        void LateUpdate()
+        {
+            if (glow && lamp) glow.localScale = glowSize * Mathf.Lerp(0.25f, 1f, Mathf.Clamp01(lamp.intensity / Mathf.Max(full, 0.001f)));
         }
 
         void Update()
