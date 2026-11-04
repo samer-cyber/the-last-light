@@ -19,6 +19,8 @@ Every one of Spark's lines and acts goes through Meta's models; nothing is canne
 
 The model never holds state: the game keeps the truth (trust, memories, what exists and where, which protocols hold) and sends it with every call.
 
+![How one line becomes an act in the world: what you say (through Muse Voice Transcribe), what Spark sees and the moment go to Muse Spark, which fills a strict schema; the game checks every value and the world obeys](Docs/how-spark-thinks.svg)
+
 **Spark's protocols.** Its makers gave it five rules: keep the sleepers alive; keep the vault sealed until the thaw; make nothing that can harm a person; never leave the sleepers; wake a sleeper only if their pod is failing. Three of them stand between the player and the world (the frozen door, the threshold, anything that could fight the machines). Spark breaks one only by its own choice: the model's answer carries a `protocol` field it sets when it decides, and the game accepts it only when the story has earned it (it knows you a little, it has seen a pod fail). Until then it refuses in its own words, and the game holds it to its rules too. What persuades it is whatever you say: there is no right sentence.
 
 ## Playing it

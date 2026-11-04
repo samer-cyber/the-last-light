@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 560" width="960" height="560" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect x="0" y="0" width="960" height="560" rx="14" fill="#11151c"/>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#c9a26b"/>
+    </marker>
+  </defs>
+  <text x="32" y="44" fill="#f4efe6" font-size="22" font-weight="600">How one line becomes an act in the world</text>
+  <text x="32" y="68" fill="#9aa3ae" font-size="14">Every call carries the whole truth; the model keeps no state. Code decides what really happens.</text>
+
+  <!-- Inputs -->
+  <g>
+    <rect x="32" y="96" width="250" height="92" rx="10" fill="#1b222d" stroke="#2f3a4a"/>
+    <text x="48" y="122" fill="#f4efe6" font-size="15" font-weight="600">What you say</text>
+    <text x="48" y="144" fill="#b9c1cb" font-size="13">Hold Q and speak, or Tab and type.</text>
+    <text x="48" y="164" fill="#c9a26b" font-size="13">Muse Voice Transcribe: speech to words</text>
+
+    <rect x="32" y="204" width="250" height="92" rx="10" fill="#1b222d" stroke="#2f3a4a"/>
+    <text x="48" y="230" fill="#f4efe6" font-size="15" font-weight="600">What Spark sees</text>
+    <text x="48" y="252" fill="#b9c1cb" font-size="13">A picture from its own eye camera,</text>
+    <text x="48" y="272" fill="#b9c1cb" font-size="13">768 x 432, with every line.</text>
+
+    <rect x="32" y="312" width="250" height="150" rx="10" fill="#1b222d" stroke="#2f3a4a"/>
+    <text x="48" y="338" fill="#f4efe6" font-size="15" font-weight="600">The moment (from the game)</text>
+    <text x="48" y="360" fill="#b9c1cb" font-size="13">What is near, by id, and its state;</text>
+    <text x="48" y="380" fill="#b9c1cb" font-size="13">what is held; what it has made;</text>
+    <text x="48" y="400" fill="#b9c1cb" font-size="13">trust and what it remembers of you;</text>
+    <text x="48" y="420" fill="#b9c1cb" font-size="13">which protocols hold, which it is</text>
+    <text x="48" y="440" fill="#b9c1cb" font-size="13">ready to break; its last lines.</text>
+  </g>
+
+  <!-- The model -->
+  <rect x="352" y="150" width="256" height="252" rx="12" fill="#231c14" stroke="#c9a26b" stroke-width="1.5"/>
+  <text x="372" y="180" fill="#f4efe6" font-size="17" font-weight="600">Muse Spark 1.3</text>
+  <text x="372" y="200" fill="#c9a26b" font-size="13">strict JSON schema, reasoning</text>
+  <text x="372" y="220" fill="#c9a26b" font-size="13">minimal or low, one call a line</text>
+  <text x="372" y="250" fill="#e8dccb" font-size="13">say: its own words</text>
+  <text x="372" y="270" fill="#e8dccb" font-size="13">mood: its voice and its eye</text>
+  <text x="372" y="290" fill="#e8dccb" font-size="13">steps: LOOK, MAKE, MOVE, SHOW...</text>
+  <text x="372" y="310" fill="#e8dccb" font-size="13">a thing: form, look, weight, heat,</text>
+  <text x="372" y="330" fill="#e8dccb" font-size="13">   glow, floats, bouncy, use, parts</text>
+  <text x="372" y="350" fill="#e8dccb" font-size="13">protocol: break one, by choice</text>
+  <text x="372" y="370" fill="#e8dccb" font-size="13">trust, remember, a private log</text>
+
+  <!-- Code -->
+  <rect x="678" y="96" width="250" height="150" rx="10" fill="#1b222d" stroke="#2f3a4a"/>
+  <text x="694" y="122" fill="#f4efe6" font-size="15" font-weight="600">The game checks it</text>
+  <text x="694" y="144" fill="#b9c1cb" font-size="13">Every value against the lists;</text>
+  <text x="694" y="164" fill="#b9c1cb" font-size="13">targets must be ids that exist;</text>
+  <text x="694" y="184" fill="#b9c1cb" font-size="13">a broken protocol only when the</text>
+  <text x="694" y="204" fill="#b9c1cb" font-size="13">story has earned it; no heat at a</text>
+  <text x="694" y="224" fill="#b9c1cb" font-size="13">sealed door, no weapons, no leaving.</text>
+
+  <rect x="678" y="262" width="250" height="200" rx="10" fill="#1b222d" stroke="#2f3a4a"/>
+  <text x="694" y="288" fill="#f4efe6" font-size="15" font-weight="600">And the world obeys</text>
+  <text x="694" y="310" fill="#b9c1cb" font-size="13">Things are built under its beam,</text>
+  <text x="694" y="330" fill="#b9c1cb" font-size="13">with mass, heat, light, lift, bounce:</text>
+  <text x="694" y="350" fill="#b9c1cb" font-size="13">fire melts ice, a balloon lifts you.</text>
+  <text x="694" y="374" fill="#c9a26b" font-size="13">Muse Image: holograms of the past,</text>
+  <text x="694" y="394" fill="#c9a26b" font-size="13">your own view redrawn as it was.</text>
+  <text x="694" y="418" fill="#b9c1cb" font-size="13">Its voice: ElevenLabs v4 Turbo,</text>
+  <text x="694" y="438" fill="#b9c1cb" font-size="13">the mood as an audio tag.</text>
+
+  <!-- Arrows -->
+  <path d="M282 142 C 320 142, 320 220, 350 230" fill="none" stroke="#c9a26b" stroke-width="2" marker-end="url(#arrow)"/>
+  <path d="M282 250 L 350 266" fill="none" stroke="#c9a26b" stroke-width="2" marker-end="url(#arrow)"/>
+  <path d="M282 386 C 320 386, 320 320, 350 310" fill="none" stroke="#c9a26b" stroke-width="2" marker-end="url(#arrow)"/>
+  <path d="M608 230 C 640 230, 640 172, 676 172" fill="none" stroke="#c9a26b" stroke-width="2" marker-end="url(#arrow)"/>
+  <path d="M803 246 L 803 260" fill="none" stroke="#c9a26b" stroke-width="2" marker-end="url(#arrow)"/>
+  <path d="M678 440 C 520 520, 300 520, 160 466" fill="none" stroke="#5d6b7d" stroke-width="1.6" stroke-dasharray="5 5" marker-end="url(#arrow)"/>
+  <text x="330" y="530" fill="#9aa3ae" font-size="13">the new state of the world goes into the next moment</text>
+</svg>
