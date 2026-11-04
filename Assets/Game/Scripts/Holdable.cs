@@ -18,6 +18,7 @@ namespace Game
 
         Rigidbody body;
         Collider[] colliders;
+        RigidbodyInterpolation smoothing = RigidbodyInterpolation.None;
 
         void Awake()
         {
@@ -32,7 +33,13 @@ namespace Game
             Held = true;
             if (!body) body = GetComponent<Rigidbody>();
             colliders = GetComponentsInChildren<Collider>();
-            if (body) body.isKinematic = true;
+            if (body)
+            {
+                body.isKinematic = true;
+                // A smoothed body keeps drawing where physics last had it, not where the hands carry it.
+                smoothing = body.interpolation;
+                body.interpolation = RigidbodyInterpolation.None;
+            }
             foreach (var c in colliders) if (!c.isTrigger) c.enabled = false;
             transform.SetParent(hand, true);
             transform.localRotation = Quaternion.identity;
@@ -46,7 +53,11 @@ namespace Game
             transform.SetParent(null, true);
             transform.SetPositionAndRotation(at, facing);
             foreach (var c in colliders) if (c) c.enabled = true;
-            if (body && !GetComponent<Floater>()) body.isKinematic = false;
+            if (body)
+            {
+                body.interpolation = smoothing;
+                if (!GetComponent<Floater>()) body.isKinematic = false;
+            }
         }
     }
 }

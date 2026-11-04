@@ -115,6 +115,7 @@ namespace Game
             }
         }
 
+        [SerializeField, Tooltip("Glide a view of the past out over the whole real view for a moment (off: it just floats).")] bool lineUp;
         static readonly int ColourId = Shader.PropertyToID("_Colour");
         static readonly int IntensityId = Shader.PropertyToID("_Intensity");
 
@@ -160,7 +161,7 @@ namespace Game
                 Vector3 at = centre + Vector3.up * Mathf.Sin(t * 1.3f) * 0.05f;
                 var turn = floating;
                 var scale = new Vector3(size, size * aspect, 1f);
-                if (before && camera)
+                if (before && camera && lineUp)
                 {
                     float k = Time.time - began, lined = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((k - 4.2f) / 1.6f)) * (1f - Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((k - 7.6f) / 1.6f)));
                     float distance = 7.5f;

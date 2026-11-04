@@ -48,6 +48,17 @@ namespace Game
         public string Saying { get; private set; }
         /// <summary>A line is being fetched or said, or one waits its turn: a quick line now would be dropped.</summary>
         public bool Busy => heldUntil > Time.time || First() != int.MaxValue;
+
+        /// <summary>
+        /// What a line is, which decides its turn: an answer to the survivor cuts in on anything else; a line said
+        /// again after being cut comes next; a story line (scripted) waits while the survivor speaks or is answered;
+        /// an aside (a ramble, an idle thought) is the least and is never said again.
+        /// </summary>
+        public enum Kind { Aside, Story, Resume, Answer }
+        /// <summary>The survivor is speaking, or being answered: stories and asides wait.</summary>
+        public bool Quiet { get; set; }
+        /// <summary>A story line was cut off (by the survivor speaking, or by an answer): the line and its mood, to say again.</summary>
+        public event System.Action<string, string> Cut;
         /// <summary>Its light, 1 normally; the ending burns it high, then out.</summary>
         public float Brightness { get; set; } = 1f;
         /// <summary>Its eye's colour; warm unless changed.</summary>
@@ -63,6 +74,11 @@ namespace Game
         int tickets;
         // Lines waiting for the voice, by ticket, with when each was last seen waiting.
         readonly Dictionary<int, float> waiting = new Dictionary<int, float>();
+        readonly Dictionary<int, Kind> kinds = new Dictionary<int, Kind>();
+        int speakingTicket = -1, hushedTicket = -1;
+        Kind speakingKind;
+        string speakingMood;
+        Hud speakingHud;
         float[] envelope;
         string gesture = "", mood = "CALM";
         Color moodColour;
@@ -152,7 +168,9 @@ namespace Game
             transform.position = Clear(from, next);
 
             // Where the eye looks: at the survivor's face while talking, at what it was sent to, else where they look.
-            Vector3 look = facing ? camera : LookAt ?? traveller.AimPoint ?? transform.position + (travellerBody ? travellerBody.forward : Vector3.forward) * 6f;
+            // Talking with them, it looks at the survivor's face (not at the camera behind them).
+            Vector3 face = traveller.transform.position + Vector3.up * 1.62f;
+            Vector3 look = facing ? face : LookAt ?? traveller.AimPoint ?? transform.position + (travellerBody ? travellerBody.forward : Vector3.forward) * 6f;
             Vector3 to = look - transform.position;
             var aim = to.sqrMagnitude > 0.01f ? Quaternion.LookRotation(to, Vector3.up) : shell.rotation;
             // It leans into its flight a little.
@@ -338,22 +356,36 @@ namespace Game
         /// time, so it never talks over itself: a line waits while another is fetched or said, and a quick one
         /// (said in the moment, like a warning) is dropped instead of waiting.
         /// </summary>
-        public IEnumerator Speak(string line, string mood, Hud hud, string name, bool quick = false, AudioClip given = null)
+        public IEnumerator Speak(string line, string mood, Hud hud, string name, bool quick = false, AudioClip given = null, Kind kind = Kind.Answer)
         {
             if (string.IsNullOrWhiteSpace(line) || quick && Busy) yield break;
-            // In turn: the earliest line still waiting goes next (one whose coroutine was stopped is passed over).
+            // In turn: the most urgent kind first, then the earliest (one whose coroutine was stopped is passed over).
             int ticket = ++tickets;
             waiting[ticket] = Time.time;
-            while (heldUntil > Time.time || First() != ticket)
+            kinds[ticket] = kind;
+            AudioClip clip = given;
+            // An answer fetches its voice while it waits, so it can cut in the moment it is ready.
+            bool fetched = clip || !spoken;
+            bool fetching = false;
+            if (!fetched && kind == Kind.Answer)
+            {
+                fetching = true;
+                StartCoroutine(SparkVoice.Clip(line, mood, 8f, c => { clip = c; fetched = true; }));
+            }
+            while (true)
             {
                 waiting[ticket] = Time.time;
+                bool first = First() == ticket;
+                bool allowed = kind >= Kind.Resume || !Quiet;
+                if (first && allowed && kind == Kind.Answer && fetched && Saying != null && speakingKind < Kind.Answer) Interrupt();
+                if (first && allowed && heldUntil <= Time.time && (fetched || !fetching)) break;
                 yield return null;
             }
             waiting.Remove(ticket);
+            kinds.Remove(ticket);
             // Held while the voice is fetched (that gives up after 8 s), then until the line has been said.
             heldUntil = Time.time + 12f;
-            AudioClip clip = given;
-            if (!clip && spoken) yield return SparkVoice.Clip(line, mood, 8f, c => clip = c);
+            if (!clip && spoken && !fetching) yield return SparkVoice.Clip(line, mood, 8f, c => clip = c);
             bool chirps = !clip;
             if (chirps) clip = DroneVoice.Chirps(line, mood);
             envelope = chirps ? null : SparkVoice.Envelope(clip);
@@ -372,18 +404,43 @@ namespace Game
             }
             Feel(mood, mood is "SAD" or "HURT" ? Mathf.Min(0.7f, seconds * 0.3f) : mood is "HAPPY" or "PLAYFUL" ? 0.05f : 0.25f);
             Saying = line;
+            Debug.Log($"Spark says ({kind}): {line}");
+            speakingTicket = ticket;
+            speakingKind = kind;
+            speakingMood = mood;
+            speakingHud = hud;
             speakStart = Time.time;
             speakingUntil = Time.time + seconds;
             // A breath before the next line, and time to have read this one.
             heldUntil = Mathf.Max(speakingUntil + 1.1f, speakStart + line.Length / readingSpeed);
-            for (float t = 0f; t < seconds; t += Time.deltaTime)
+            for (float t = 0f; t < seconds && hushedTicket != ticket; t += Time.deltaTime)
             {
                 hud.Voice(name, line, Mathf.Clamp01(t / (seconds * 0.9f)));
                 yield return null;
             }
+            if (speakingTicket == ticket) speakingTicket = -1;
+            if (hushedTicket == ticket) yield break;
             Saying = null;
             hud.Voice(name, line, 1f);
             hud.VoiceFade(2.2f + line.Length * 0.03f);
+        }
+
+        /// <summary>The survivor began to speak: it stops mid-word. A story line is said again after they are answered.</summary>
+        public void Hush() => Interrupt();
+
+        void Interrupt()
+        {
+            if (Saying == null || speakingTicket < 0) return;
+            if (voice) voice.Stop();
+            hushedTicket = speakingTicket;
+            Debug.Log($"Spark cut off ({speakingKind}): {Saying}");
+            if (speakingKind == Kind.Story) Cut?.Invoke(Saying, speakingMood);
+            Saying = null;
+            speakingTicket = -1;
+            speakingUntil = Time.time;
+            heldUntil = Time.time + 0.25f;
+            envelope = null;
+            if (speakingHud) speakingHud.VoiceGone();
         }
 
         float chirpedAt = -100f;
@@ -421,8 +478,17 @@ namespace Game
         int First()
         {
             int first = int.MaxValue;
+            var best = Kind.Aside;
             foreach (var w in waiting)
-                if (Time.time - w.Value < 1f && w.Key < first) first = w.Key;
+            {
+                if (Time.time - w.Value >= 1f) continue;
+                var k = kinds.TryGetValue(w.Key, out var known) ? known : Kind.Story;
+                if (first == int.MaxValue || k > best || k == best && w.Key < first)
+                {
+                    first = w.Key;
+                    best = k;
+                }
+            }
             return first;
         }
 
@@ -433,6 +499,13 @@ namespace Game
         }
 
         /// <summary>Takes a picture with its eye of a point, with the shutter's sound and a blink.</summary>
+        /// <summary>Its shutter and a blink: it took in what the survivor sees.</summary>
+        public void Blink()
+        {
+            if (voice) voice.PlayOneShot(DroneVoice.Shutter(), 0.45f);
+            open = 0.2f;
+        }
+
         public byte[] Picture(Vector3 lookAt)
         {
             if (voice) voice.PlayOneShot(DroneVoice.Shutter(), 0.6f);

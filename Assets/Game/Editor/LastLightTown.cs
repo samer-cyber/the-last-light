@@ -366,7 +366,7 @@ namespace Game.Building
 
         /// <summary>A painted board on two posts, which can be looked at closely.</summary>
         static Transform Signboard(string name, Transform parent, Mesh cube, Mesh quad, Material post, Texture2D paint, string title,
-            Vector3 at, Vector3 readFrom, float width, float height, float raise, float lean)
+            Vector3 at, Vector3 readFrom, float width, float height, float raise, float lean, string words = null)
         {
             var sign = new GameObject(name).transform;
             sign.SetParent(parent, false);
@@ -398,7 +398,7 @@ namespace Game.Building
             face.transform.localRotation = Quaternion.identity;
             face.transform.localScale = new Vector3(width, height, 1f);
             face.receiveShadows = true;
-            face.gameObject.AddComponent<Readable>().Set(paint, title);
+            face.gameObject.AddComponent<Readable>().Set(paint, title, words);
             return sign;
         }
 
@@ -561,7 +561,7 @@ namespace Game.Building
             taken.Add((new Vector2(schoolAt.x, schoolAt.z), 12f));
             var building = ModelAt("TownChalet", school, "School Building", schoolAt, Quaternion.Euler(0f, 90f, 0f), 17f, false, 0.25f, 1f);
             Signboard("School Sign", school, cube, quad, wood, Load<Texture2D>($"{Root}/Textures/Signs/School Name.png"), "the school's sign",
-                On(-25f, 64f), Vector3.right, 3.4f, 0.85f, 1.15f, 3f);
+                On(-25f, 64f), Vector3.right, 3.4f, 0.85f, 1.15f, 3f, "SUNVALE PRIMARY SCHOOL");
             ModelAt("TownSwings", school, "Swings", On(-23f, 60.5f), Quaternion.Euler(0f, 90f + R(-5f, 5f), R(-2f, 2f)), 5f, false, 0.35f, 0.3f);
             ModelAt("TownSlide", school, "Slide", On(-25.5f, 78.5f), Quaternion.Euler(0f, 160f, 0f), 3.2f, false, 0.4f, 0.3f);
             taken.Add((new Vector2(-23f, 60.5f), 4f));
@@ -621,7 +621,7 @@ namespace Game.Building
 
             // ---- The welcome sign at the edge of town, read on the way in from the vault ----
             Signboard("Welcome Sign", root, cube, quad, wood, Load<Texture2D>($"{Root}/Textures/Signs/Town Welcome.png"), "the sign at the edge of town",
-                On(6.4f, 17f), Vector3.back, 3.2f, 1.6f, 1.1f, 4f);
+                On(6.4f, 17f), Vector3.back, 3.2f, 1.6f, 1.1f, 4f, "WELCOME TO SUNVALE. POP. 2,180");
             landmarks.Add(MakeLandmark("Welcome Sign Place", root, On(6.4f, 17f) + Vector3.up * 1.9f, "TOWN_SIGN", "the town's sign",
                 "a weathered sign at the edge of town: \"WELCOME TO SUNVALE. POP. 2,180\"", new Vector3(3.4f, 1.8f, 0.6f)));
 
@@ -647,7 +647,7 @@ namespace Game.Building
 
             MakeChasm(world, cube, quad, puff, wire, snow, landmarks);
             Signboard("Bridge Sign", root, cube, quad, wood, Load<Texture2D>($"{Root}/Textures/Signs/Bridge Out.png"), "a warning sign at the road's end",
-                On(-3.6f, ChasmNear - 7f), Vector3.back, 1.5f, 1f, 0.9f, -6f);
+                On(-3.6f, ChasmNear - 7f), Vector3.back, 1.5f, 1f, 0.9f, -6f, "DANGER. BRIDGE OUT");
         }
 
         /// <summary>

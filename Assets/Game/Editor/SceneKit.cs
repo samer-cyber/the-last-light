@@ -346,7 +346,7 @@ namespace Game.Building
             panel.scaleMode = PanelScaleMode.ScaleWithScreenSize;
             panel.referenceResolution = new Vector2Int(1920, 1080);
             panel.screenMatchMode = PanelScreenMatchMode.MatchWidthOrHeight;
-            panel.match = 1f;
+            panel.match = 0.5f;
             EditorUtility.SetDirty(panel);
             return panel;
         }

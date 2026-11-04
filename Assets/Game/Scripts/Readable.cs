@@ -13,9 +13,11 @@ namespace Game
 
         [SerializeField] Texture2D page;
         [SerializeField] string title = "the note";
+        [SerializeField, TextArea, Tooltip("What is written on it, word for word (Spark is told it; no photograph needed).")] string words;
 
         public Texture2D Page => page;
         public string Title => title;
+        public string Words => words;
         /// <summary>Width over height of the page, so it is shown in its own shape.</summary>
         public float Aspect => page && page.height > 0 ? page.width / (float)page.height : 1f;
 
@@ -32,10 +34,11 @@ namespace Game
             }
         }
 
-        public void Set(Texture2D page, string title)
+        public void Set(Texture2D page, string title, string words = null)
         {
             this.page = page;
             this.title = title;
+            this.words = words;
         }
     }
 }

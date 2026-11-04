@@ -89,7 +89,16 @@ namespace Game.Building
                 var plate = Box(name, under, look, at, new Vector3(size.x, size.y, 0.004f), false);
                 plate.transform.localRotation = turn;
                 plate.shadowCastingMode = ShadowCastingMode.Off;
-                plate.gameObject.AddComponent<Readable>().Set(painted, "a sign: " + name.ToLowerInvariant());
+                plate.gameObject.AddComponent<Readable>().Set(painted, "a sign: " + name.ToLowerInvariant(), sign switch
+                {
+                    "Shelter 7" => "SHELTER 7. SUNVALE CIVIL SHELTER. SEALED YEAR 0",
+                    "Pods West" => "PODS 1 - 20",
+                    "Pods East" => "PODS 21 - 40",
+                    "Keep Clear" => "KEEP DOORS CLEAR. IN COLD SLEEP DO NOT OPEN PODS BY HAND",
+                    "Hall A" => "HALL A",
+                    "Lumen Mark" => "(the Lumen company's sun mark, no words)",
+                    _ => null,
+                });
                 return plate;
             }
             Renderer Clue(string name, Transform under, string file, Vector3 at, Vector2 size, Quaternion turn, float glow = 0f, bool clear = false)
@@ -120,6 +129,18 @@ namespace Game.Building
                     "Status Screen" => "the hall's status screen",
                     "Tally" => "Spark's tally",
                     _ => name.ToLowerInvariant(),
+                }, name switch
+                {
+                    "Tomas Scratch" => "GONE FOR HELP. BACK IN 3 DAYS. - T. VARGA, YR 61",
+                    "Mara Note" => "Spark - I'm going for the sun mirror. A Harvester took its heart to the old station past the chasm. I'll bring it back. If I'm not back in ten days, don't follow me. Don't let anyone follow me. Keep the lights on. - Mara",
+                    "Ima Drawing" => "(a child's crayon drawing, no words: a little round white robot with one orange eye holding hands with a girl with two pigtails, under a big smiling sun)",
+                    "Brothers Scratch" => "BEN + TYL. WE'LL BRING HELP",
+                    "Hale Label" => "DR. ADA HALE, YEAR 187. SHE TAUGHT ME THE STARS",
+                    "Pod 40 Label" => "40   R. ARCH (frosted over)",
+                    "Protocols Poster" => "SUNVALE CIVIL SHELTER 7. CARETAKER PROTOCOLS. 1 KEEP THE SLEEPERS ALIVE. 2 KEEP THE VAULT SEALED: THE DOOR STAYS SHUT UNTIL THE THAW. 3 MAKE NOTHING THAT CAN HARM A PERSON. 4 NEVER LEAVE THE SLEEPERS. 5 WAKE A SLEEPER ONLY IF THEIR POD IS FAILING. Caretaker units 1 to 7 obey these protocols without exception. Report faults to Hall A. ISSUED YEAR 0",
+                    "Status Screen" => "SHELTER 7 HALL A STATUS. YEAR 211 OF THE COLD, DAY 47. POWER CELLS 4%. PODS IN HALL 40. EXTERIOR -58 C. VAULT DOOR SEALED/ICE. THAW NOT DETECTED. SUN MIRROR NO SIGNAL",
+                    "Tally" => "(rows of chalk marks in fives) 77,112 days. still here.",
+                    _ => null,
                 });
                 return plate;
             }

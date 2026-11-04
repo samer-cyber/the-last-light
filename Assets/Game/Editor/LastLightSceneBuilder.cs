@@ -450,7 +450,12 @@ namespace Game.Building
             WireArray(director, "stoneSteps", Clips("foley_step_stone", 6));
             WireArray(director, "iceSteps", Clips("foley_step_ice", 6));
             WireArray(director, "metalSteps", Clips("foley_step_metal", 6));
-            Wire(director, ("sealClip", FindClip("pod_seal_hiss")));
+            Wire(director, ("sealClip", FindClip("pod_seal_hiss")), ("gustClip", FindClip("door_gust")));
+            // Snow blown in through the door the moment it first opens.
+            var gust = MakeParticles("Door Gust", world, snowMaterial);
+            gust.transform.position = vaultDoor.position + vaultDoor.right * 1.33f + Vector3.up * 1.3f + Vector3.forward * 0.6f;
+            DoorGust(gust);
+            Wire(director, ("doorGust", gust));
 
             // Everything solid in the world can be stood on and kept out of: a collider for each shape that has none
             // (light, glow, writing and windows are not solid; moving things have their own).
@@ -976,7 +981,8 @@ namespace Game.Building
             var page = message.gameObject.AddComponent<BoxCollider>();
             page.isTrigger = true;
             page.size = new Vector3(1f, 1f, 0.05f);
-            message.gameObject.AddComponent<Readable>().Set(Load<Texture2D>($"{Root}/Textures/Maker Message.png"), "Mara's words on the wall");
+            message.gameObject.AddComponent<Readable>().Set(Load<Texture2D>($"{Root}/Textures/Maker Message.png"), "Mara's words on the wall",
+                "Spark - the Harvester has the heart. When it runs hot its back glows and its shield drops. Only then. I tried. Keep the lights on. - Mara");
             landmarks.Add(MakeLandmark("Writing Place", message.transform, message.transform.position, "MESSAGE", "the writing on the wall",
                 "Mara Okonjo's last words, scratched into the station's inner north wall in her hand, too small to read from the door. She came here for the heart in year 98 and never came home", new Vector3(3.6f, 2.2f, 0.3f)));
 
@@ -1002,10 +1008,14 @@ namespace Game.Building
             heartLight.color = new Color(1f, 0.72f, 0.4f);
             heartLight.range = 4f;
             heartLight.intensity = 1.2f;
+            var heartSolid = heartObject.AddComponent<BoxCollider>();
+            heartSolid.center = new Vector3(0f, 0.45f, 0f);
+            heartSolid.size = new Vector3(0.52f, 0.92f, 0.52f);
             var heartBodyRb = heartObject.AddComponent<Rigidbody>();
             heartBodyRb.mass = 40f;
             heartBodyRb.isKinematic = true;
             heartBodyRb.interpolation = RigidbodyInterpolation.Interpolate;
+            heartBodyRb.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
             heartObject.AddComponent<Heart>();
             var heart = heartObject.AddComponent<Holdable>();
             heart.Title = "the heart";
@@ -1206,6 +1216,47 @@ namespace Game.Building
             landmarks.Add(MakeLandmark("Socket Place", socketRoot, socketRoot.position + Vector3.up * 0.5f, "SOCKET", "the mirror's socket",
                 "the socket for the mirror's heart, at the foot of its tower", new Vector3(1.1f, 0.9f, 1f)));
             return parts;
+        }
+
+        /// <summary>A burst of fine snow on the wind, blown into the passage (toward -z) when the vault door opens.</summary>
+        static void DoorGust(ParticleSystem particles)
+        {
+            var main = particles.main;
+            main.loop = false;
+            main.playOnAwake = false;
+            main.duration = 1.6f;
+            main.startLifetime = new ParticleSystem.MinMaxCurve(1.2f, 2.4f);
+            main.startSpeed = 0f;
+            main.startSize = new ParticleSystem.MinMaxCurve(0.03f, 0.09f);
+            main.startColor = new Color(0.92f, 0.94f, 1f, 0.85f);
+            main.maxParticles = 900;
+            main.simulationSpace = ParticleSystemSimulationSpace.World;
+            var emission = particles.emission;
+            emission.rateOverTime = 260f;
+            emission.SetBursts(new[] { new ParticleSystem.Burst(0f, 320) });
+            var shape = particles.shape;
+            shape.shapeType = ParticleSystemShapeType.Box;
+            shape.scale = new Vector3(2.4f, 2.6f, 0.4f);
+            var velocity = particles.velocityOverLifetime;
+            velocity.enabled = true;
+            velocity.space = ParticleSystemSimulationSpace.World;
+            velocity.x = new ParticleSystem.MinMaxCurve(-1.6f, 1.6f);
+            velocity.y = new ParticleSystem.MinMaxCurve(-0.8f, 0.9f);
+            velocity.z = new ParticleSystem.MinMaxCurve(-13f, -6f);
+            var noise = particles.noise;
+            noise.enabled = true;
+            noise.strength = 1.2f;
+            noise.frequency = 0.8f;
+            var colour = particles.colorOverLifetime;
+            colour.enabled = true;
+            var fade = new Gradient();
+            fade.SetKeys(new[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(Color.white, 1f) },
+                new[] { new GradientAlphaKey(1f, 0f), new GradientAlphaKey(1f, 0.6f), new GradientAlphaKey(0f, 1f) });
+            colour.color = fade;
+            var renderer = particles.GetComponent<ParticleSystemRenderer>();
+            renderer.renderMode = ParticleSystemRenderMode.Stretch;
+            renderer.velocityScale = 0.03f;
+            renderer.lengthScale = 1.2f;
         }
 
         static void Snow(ParticleSystem particles)

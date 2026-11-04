@@ -164,6 +164,8 @@ namespace Game
             voiceFade?.Pause();
             later.Remove("voice");
             voiceName.text = (name ?? "").ToUpperInvariant();
+            // Spark speaking: the survivor's last words are gone, so the two never lie over each other.
+            said.RemoveFromClassList("hud__said--shown");
             voice.EnableInClassList("hud__voice--memory", name == "YOU, LONG AGO");
             int letters = Mathf.Clamp(Mathf.CeilToInt(line.Length * shown), 0, line.Length);
             // The rest is laid out but clear, so the line does not jump as it is typed.
@@ -329,7 +331,22 @@ namespace Game
         }
 
         /// <summary>The player's own words, as they were heard, for a few seconds.</summary>
-        public void Said(string text, float seconds = 5f) => Flash(said, "hud__said--shown", "“" + text + "”", seconds, ref saidFade);
+        public void Said(string text, float seconds = 5f)
+        {
+            Build();
+            // The survivor speaking: Spark's words make room.
+            voice.RemoveFromClassList("hud__voice--shown");
+            Flash(said, "hud__said--shown", "“" + text + "”", seconds, ref saidFade);
+        }
+
+        /// <summary>Spark was cut off mid-line: its words go at once.</summary>
+        public void VoiceGone()
+        {
+            Build();
+            voiceFade?.Pause();
+            later.Remove("voice");
+            voice.RemoveFromClassList("hud__voice--shown");
+        }
 
         /// <summary>A short line in the middle of the view, for a few seconds ("millions of years pass").</summary>
         public void Note(string text, float seconds = 4f) => Flash(note, "hud__note--shown", text, seconds, ref noteFade);

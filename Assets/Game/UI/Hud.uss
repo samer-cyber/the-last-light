@@ -175,7 +175,7 @@
 }
 
 .hud__said {
-    bottom: 196px;
+    bottom: 300px;
     font-size: 30px;
     color: rgba(242, 244, 255, 0.95);
 }
@@ -497,10 +497,12 @@
 
 .hud__log {
     position: absolute;
-    right: 36px;
-    top: 300px;
-    width: 440px;
-    padding: 14px 18px 16px 18px;
+    right: 56px;
+    top: 150px;
+    width: 620px;
+    max-height: 720px;
+    overflow: hidden;
+    padding: 20px 26px 22px 26px;
     background-color: rgba(8, 9, 12, 0.82);
     border-left-width: 2px;
     border-color: rgba(255, 186, 110, 0.7);
@@ -516,7 +518,7 @@
 }
 
 .hud__log-head {
-    font-size: 13px;
+    font-size: 18px;
     letter-spacing: 6px;
     color: rgb(255, 186, 110);
     margin-bottom: 10px;
@@ -527,13 +529,13 @@
 }
 
 .hud__log-when {
-    font-size: 11px;
+    font-size: 15px;
     letter-spacing: 3px;
     color: rgba(255, 196, 140, 0.7);
 }
 
 .hud__log-entry {
-    font-size: 16px;
+    font-size: 23px;
     color: rgba(245, 240, 232, 0.95);
     white-space: normal;
 }
@@ -593,9 +595,10 @@
 
 .hud__protocols {
     position: absolute;
-    left: 40px;
-    top: 132px;
-    padding: 10px 16px 10px 14px;
+    left: 56px;
+    top: 150px;
+    max-width: 760px;
+    padding: 18px 26px 18px 22px;
     background-color: rgba(8, 9, 12, 0.62);
     border-left-width: 2px;
     border-color: rgba(160, 200, 255, 0.55);
@@ -611,14 +614,15 @@
 }
 
 .hud__protocols-head {
-    font-size: 14px;
+    font-size: 18px;
     letter-spacing: 5px;
     color: rgba(180, 210, 255, 0.85);
     margin-bottom: 6px;
 }
 
 .hud__protocol {
-    font-size: 18px;
+    font-size: 25px;
+    white-space: normal;
     letter-spacing: 1px;
     color: rgba(232, 238, 248, 0.88);
     text-shadow: 0 1px 6px rgba(0, 0, 0, 0.9);

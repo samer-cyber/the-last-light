@@ -214,16 +214,16 @@ namespace Game
         /// <summary>The feeling as a direction the model performs, not loose settings that swing at random.</summary>
         static string Tag(string mood) => mood switch
         {
-            "SAD" => "[sad] ",
-            "HURT" => "[hurt] ",
+            "SAD" => "[softly] ",
+            "HURT" => "[quietly] ",
             "HAPPY" => "[happy] ",
             "PLAYFUL" => "[playfully] ",
             "CURIOUS" => "[curious] ",
-            "SCARED" => "[scared] ",
-            "WORRIED" => "[nervous] ",
-            "ANGRY" => "[frustrated] ",
-            "SORRY" => "[apologetic] ",
-            "SURE" => "[confident] ",
+            "SCARED" => "[tense] ",
+            "WORRIED" => "[thoughtful] ",
+            "ANGRY" => "[firmly] ",
+            "SORRY" => "[gently] ",
+            "SURE" => "[warmly] ",
             _ => "",
         };
 

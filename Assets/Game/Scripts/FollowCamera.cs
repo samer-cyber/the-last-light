@@ -15,7 +15,7 @@ namespace Game
         [SerializeField] float height = 1.55f;
         [SerializeField] float shoulder = 0.55f;
         [SerializeField] float distance = 4.4f;
-        [SerializeField] Vector2 distanceRange = new Vector2(2.2f, 8f);
+        [SerializeField] Vector2 distanceRange = new Vector2(1.2f, 8f);
         [SerializeField] float lookSpeed = 0.085f;
         [SerializeField] float smoothing = 18f;
         [SerializeField] float follow = 14f;
