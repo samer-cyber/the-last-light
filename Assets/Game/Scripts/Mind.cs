@@ -234,8 +234,9 @@ namespace Game
         {
             if (effort != "minimal") return effort;
             string w = (words ?? "").Trim();
-            bool deep = w.StartsWith("(") || w.Contains("?") || w.Split(' ').Length > 9 ||
-                        new[] { "why", "how", "what", "who", "tell me", "explain", "remember", "think" }.Any(k => w.ToLowerInvariant().StartsWith(k));
+            // Spark's own thoughts (a ramble, the log) can take their time; what the survivor says is answered fast, since
+            // the wait between speaking and an answer is the worst of it (Samer, 4 Nov). Only a long, tangled line gets more.
+            bool deep = w.StartsWith("(") || w.Split(' ').Length > 16;
             return deep ? "low" : effort;
         }
 

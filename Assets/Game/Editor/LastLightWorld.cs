@@ -353,7 +353,7 @@ namespace Game.Building
             landmarks.Add(MakeLandmark("Billboard Place", board, board.position + Vector3.up * 6.6f, "BILLBOARD", "the old billboard",
                 "a faded Lumen advertisement over the square: \"LUMEN. We think, so you don't have to.\"", new Vector3(8.6f, 4.6f, 0.6f)));
             landmarks.Add(MakeLandmark("Town Place", root, new Vector3(0f, sy, 70f), "TOWN", "the frozen town",
-                "Ima's town, where you lived before the cold: two hundred houses, twelve thousand people once, all gone into the vault or the snow; houses fallen in, cars buried, lamps dead",
+                "Ima's town, where you lived before the cold: a small town of about two thousand people once, all gone into the vault or the snow; houses fallen in, cars buried, lamps dead",
                 Vector3.zero));
         }
 

@@ -623,7 +623,7 @@ namespace Game.Building
             Signboard("Welcome Sign", root, cube, quad, wood, Load<Texture2D>($"{Root}/Textures/Signs/Town Welcome.png"), "the sign at the edge of town",
                 On(6.4f, 17f), Vector3.back, 3.2f, 1.6f, 1.1f, 4f);
             landmarks.Add(MakeLandmark("Welcome Sign Place", root, On(6.4f, 17f) + Vector3.up * 1.9f, "TOWN_SIGN", "the town's sign",
-                "a weathered sign at the edge of town: \"WELCOME TO SUNVALE. POP. 12,400\"", new Vector3(3.4f, 1.8f, 0.6f)));
+                "a weathered sign at the edge of town: \"WELCOME TO SUNVALE. POP. 2,180\"", new Vector3(3.4f, 1.8f, 0.6f)));
 
             // ---- Mist lying in the streets ----
             var puff = MakeTexture("Mist Puff", 128, true, (u, v) =>
