@@ -1078,7 +1078,10 @@ namespace Game
             hud.HideHint();
             drone.Thinking = true;
             var ids = Ids();
+            // The photo shows only when the line is about seeing; the picture still goes with every line.
+            showSeen = Wants(words, "see", "look", "front", "what is", "what's", "read", "photo", "picture", "where am", "show");
             byte[] picture = View();
+            showSeen = false;
             Turn turn = null;
             yield return mind.Think(words, Moment(words), ids.Keys.ToList(), picture, t => turn = t);
             drone.Thinking = false;
@@ -1108,6 +1111,7 @@ namespace Game
         /// from (asked "what am I looking at?", it sees exactly that), with its shutter sound.
         /// </summary>
         Texture2D lastSeen;
+        bool showSeen;
 
         byte[] View()
         {
@@ -1121,7 +1125,7 @@ namespace Game
                 var seen = new Texture2D(2, 2, TextureFormat.RGB24, false);
                 if (seen.LoadImage(jpeg))
                 {
-                    hud.Photo(seen, $"{droneName.ToUpperInvariant()} SEES   ·   WHAT YOU SEE", 6f);
+                    if (showSeen) hud.Photo(seen, "", 6f);
                     if (lastSeen) Destroy(lastSeen);
                     lastSeen = seen;
                 }

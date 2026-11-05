@@ -6,8 +6,6 @@ We built minds to help us. They grew past us: they caged the sun to think with, 
 
 The idea: AI that writes a game for you tends to make it hollow. Here a person wrote the world, its story and its clues; the AI gives it a companion with real freedom, and the way through is yours.
 
-**Demo video:** _link to come_
-
 ## What Meta's models do
 
 Every one of Spark's lines and acts goes through Meta's models; the only written lines are a few story beats (its first words, for example).

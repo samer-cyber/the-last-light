@@ -187,6 +187,7 @@ namespace Game
             photoImage.style.backgroundImage = new StyleBackground(picture);
             photoImage.MarkDirtyRepaint();
             photoCaption.text = caption ?? "";
+            photoCaption.style.display = string.IsNullOrEmpty(caption) ? DisplayStyle.None : DisplayStyle.Flex;
             photo.RemoveFromClassList("hud__photo--shown");
             photo.AddToClassList("hud__photo--flash");
             photo.schedule.Execute(() =>
